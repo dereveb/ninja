@@ -9,7 +9,6 @@
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/plotly.js/2.35.2/plotly.min.js"></script>
 <script>
-  // Fallback CDN if cdnjs is blocked
   if (typeof Plotly === 'undefined') {
     document.write('<script src="https://cdn.jsdelivr.net/npm/plotly.js-dist-min@2.35.2/plotly.min.js"><\/script>');
   }
@@ -24,16 +23,14 @@
     --muted:     #6b7280;
     --soft:      #9ca3af;
     --accent:    #0f172a;
+    --warn-bg:   #fef3c7;
+    --warn-bd:   #fde68a;
+    --warn-tx:   #92400e;
 
-    /* S / M / L — chłodny → ciepły, dobre rozróżnienie i sensowne dla daltonistów */
-    --c-s:       #2563eb;  /* blue-600 */
-    --c-m:       #7c3aed;  /* violet-600 */
-    --c-l:       #db2777;  /* pink-600 */
-    --c-all:     #1f2937;  /* gray-800 */
-
-    --c-s-bg:    rgba(37,99,235,0.10);
-    --c-m-bg:    rgba(124,58,237,0.10);
-    --c-l-bg:    rgba(219,39,119,0.10);
+    --c-s:       #2563eb;
+    --c-m:       #7c3aed;
+    --c-l:       #db2777;
+    --c-all:     #1f2937;
   }
 
   *{box-sizing:border-box}
@@ -46,7 +43,6 @@
 
   .wrap{max-width:1280px;margin:0 auto;padding:28px 24px 48px}
 
-  /* Header */
   header{display:flex;align-items:end;justify-content:space-between;gap:24px;
          padding-bottom:18px;border-bottom:1px solid var(--border)}
   h1{font-size:26px;font-weight:700;letter-spacing:-0.02em;margin:0 0 4px}
@@ -59,38 +55,86 @@
   /* KPI strip */
   .kpis{display:grid;grid-template-columns:repeat(5,1fr);gap:1px;
         background:var(--border);border:1px solid var(--border);
-        border-radius:10px;overflow:hidden;margin:18px 0 22px}
+        border-radius:10px;overflow:hidden;margin:18px 0 14px}
   .kpi{background:var(--surface);padding:14px 16px}
   .kpi .lbl{font-size:11px;letter-spacing:0.08em;text-transform:uppercase;color:var(--muted)}
   .kpi .val{font-size:24px;font-weight:600;margin-top:4px;letter-spacing:-0.01em}
   .kpi .unit{font-size:12px;color:var(--soft);margin-left:4px;font-weight:500}
 
+  /* Forecast strip */
+  .forecast{display:grid;grid-template-columns:auto 1fr 1fr 1fr;gap:1px;
+            background:var(--border);border:1px solid var(--border);
+            border-radius:10px;overflow:hidden;margin-bottom:14px}
+  .fc-title{background:var(--surface);padding:14px 18px;display:flex;flex-direction:column;justify-content:center}
+  .fc-title .lbl{font-size:11px;letter-spacing:0.08em;text-transform:uppercase;color:var(--muted)}
+  .fc-title .hint{font-size:11px;color:var(--soft);margin-top:2px;max-width:200px}
+  .fc-cell{background:var(--surface);padding:14px 16px;border-left:3px solid}
+  .fc-cell.s{border-left-color:var(--c-s)}
+  .fc-cell.m{border-left-color:var(--c-m)}
+  .fc-cell.l{border-left-color:var(--c-l)}
+  .fc-cell .lbl{font-size:11px;letter-spacing:0.08em;text-transform:uppercase;color:var(--muted)}
+  .fc-cell .val{font-size:22px;font-weight:600;margin-top:3px;letter-spacing:-0.01em}
+  .fc-cell .eta{font-size:12px;color:var(--soft);margin-top:2px}
+
   /* Controls */
   .controls{display:flex;flex-wrap:wrap;gap:18px;align-items:center;
             background:var(--surface);border:1px solid var(--border);
-            border-radius:10px;padding:12px 14px;margin-bottom:16px}
-  .group{display:flex;align-items:center;gap:8px}
+            border-radius:10px;padding:12px 14px;margin-bottom:10px}
+  .group{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
   .group > span.gl{font-size:12px;color:var(--muted);
                    text-transform:uppercase;letter-spacing:0.08em;margin-right:4px}
   .btn{cursor:pointer;user-select:none;font:inherit;font-size:13px;font-weight:500;
        padding:6px 12px;border:1px solid var(--border-strong);
        background:var(--surface);border-radius:7px;color:var(--text);
-       transition:all .12s ease}
+       transition:all .12s ease;white-space:nowrap}
   .btn:hover{border-color:#a8a29e;background:#fafaf9}
+  .btn:disabled{opacity:0.5;cursor:not-allowed}
   .btn.on{background:var(--accent);color:#fff;border-color:var(--accent)}
   .btn.sz-s.on{background:var(--c-s);border-color:var(--c-s)}
   .btn.sz-m.on{background:var(--c-m);border-color:var(--c-m)}
   .btn.sz-l.on{background:var(--c-l);border-color:var(--c-l)}
+  .btn.small{font-size:12px;padding:4px 9px}
+  .btn.ghost{background:transparent;border:none;color:var(--muted);text-decoration:underline;padding:4px 2px}
+  .btn.ghost:hover{color:var(--text);background:transparent}
   .sep{width:1px;height:24px;background:var(--border)}
   .spacer{flex:1}
-  .legend-line{display:inline-block;width:22px;height:0;vertical-align:middle;
-               border-top-width:2px;border-top-style:dashed;margin-right:4px}
+
+  input[type="date"], input[type="number"]{
+    font:inherit;font-size:13px;padding:5px 8px;
+    border:1px solid var(--border-strong);border-radius:6px;
+    background:var(--surface);color:var(--text);
+    font-variant-numeric:tabular-nums;
+  }
+  input[type="date"]:focus, input[type="number"]:focus{
+    outline:none;border-color:var(--accent);box-shadow:0 0 0 3px rgba(15,23,42,0.08)
+  }
+  label.inline{font-size:12px;color:var(--muted);margin-right:2px}
+
+  /* Removed-points pill */
+  .pill{display:inline-flex;align-items:center;gap:6px;font-size:12px;
+        background:var(--warn-bg);border:1px solid var(--warn-bd);
+        color:var(--warn-tx);padding:4px 10px;border-radius:999px}
+  .pill.hidden{display:none}
+
+  /* Two-panel row (forecast hint + add task) */
+  .panels{display:grid;grid-template-columns:1fr;gap:14px;margin-bottom:16px}
+  .panel{background:var(--surface);border:1px solid var(--border);
+         border-radius:10px;padding:12px 14px}
+  .panel h3{font-size:12px;font-weight:600;margin:0 0 10px;
+            text-transform:uppercase;letter-spacing:0.08em;color:var(--muted)}
+  .addform{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+  .addform .btn-primary{background:var(--accent);color:#fff;border-color:var(--accent)}
+  .addform .msg{font-size:12px;color:var(--soft);margin-left:6px}
+  .addform .msg.ok{color:#15803d}
+  .addform .msg.err{color:#b91c1c}
 
   /* Chart cards */
   .card{background:var(--surface);border:1px solid var(--border);
         border-radius:10px;padding:14px 14px 10px}
   .card h2{font-size:13px;font-weight:600;margin:0 0 8px;
-           text-transform:uppercase;letter-spacing:0.08em;color:var(--muted)}
+           text-transform:uppercase;letter-spacing:0.08em;color:var(--muted);
+           display:flex;justify-content:space-between;align-items:center}
+  .card h2 .hint{font-size:11px;color:var(--soft);text-transform:none;letter-spacing:0;font-weight:400}
   #scatter{height:480px;width:100%}
   .row2{display:grid;grid-template-columns:1.2fr 1fr;gap:16px;margin-top:16px}
   #hist{height:300px}
@@ -108,11 +152,13 @@
           vertical-align:middle;margin-right:7px}
   .row-all td{font-weight:600;background:#fafaf9}
 
-  footer{margin-top:22px;display:flex;gap:10px;align-items:center;color:var(--muted);font-size:12px}
+  footer{margin-top:22px;display:flex;gap:10px;align-items:center;
+         color:var(--muted);font-size:12px;flex-wrap:wrap}
   footer .btn{font-size:12px;padding:5px 10px}
 
   @media (max-width: 880px){
     .kpis{grid-template-columns:repeat(2,1fr)}
+    .forecast{grid-template-columns:1fr}
     .row2{grid-template-columns:1fr}
     header{flex-direction:column;align-items:flex-start}
   }
@@ -125,8 +171,8 @@
     <div>
       <h1>Lead Times — Dashboard 2024/25</h1>
       <div class="sub">
-        <span class="badge">36 zadań</span>
-        <span class="badge">lipiec 2024 – grudzień 2025</span>
+        <span class="badge" id="b-count">36 zadań</span>
+        <span class="badge" id="b-range">lipiec 2024 – grudzień 2025</span>
         <span class="badge">źródło: Lead_Times_-_2024-25.xlsx</span>
       </div>
     </div>
@@ -142,7 +188,30 @@
     <div class="kpi"><div class="lbl">Maks.</div><div class="val num" id="k-max">— <span class="unit">dni</span></div></div>
   </div>
 
-  <!-- Controls -->
+  <!-- Forecast strip -->
+  <div class="forecast">
+    <div class="fc-title">
+      <div class="lbl">Prognoza dostarczenia</div>
+      <div class="hint">Czas potrzebny na nowe zadanie z 85% pewnością (P85 z widocznych danych).</div>
+    </div>
+    <div class="fc-cell s">
+      <div class="lbl">Rozmiar S</div>
+      <div class="val num" id="fc-s">—</div>
+      <div class="eta" id="fc-s-eta">—</div>
+    </div>
+    <div class="fc-cell m">
+      <div class="lbl">Rozmiar M</div>
+      <div class="val num" id="fc-m">—</div>
+      <div class="eta" id="fc-m-eta">—</div>
+    </div>
+    <div class="fc-cell l">
+      <div class="lbl">Rozmiar L</div>
+      <div class="val num" id="fc-l">—</div>
+      <div class="eta" id="fc-l-eta">—</div>
+    </div>
+  </div>
+
+  <!-- Controls row 1: filters & display -->
   <div class="controls">
     <div class="group">
       <span class="gl">Rozmiar</span>
@@ -175,15 +244,62 @@
       <button class="btn on" id="t-yaxis-linear">liniowa</button>
       <button class="btn" id="t-yaxis-log">log</button>
     </div>
+  </div>
+
+  <!-- Controls row 2: date range & removed indicator -->
+  <div class="controls">
+    <div class="group">
+      <span class="gl">Zakres dat</span>
+      <label class="inline" for="dt-from">od</label>
+      <input type="date" id="dt-from">
+      <label class="inline" for="dt-to">do</label>
+      <input type="date" id="dt-to">
+    </div>
+    <div class="group">
+      <span class="gl">Skróty</span>
+      <button class="btn small" data-days="30">30 dni</button>
+      <button class="btn small" data-days="90">90 dni</button>
+      <button class="btn small" data-days="180">180 dni</button>
+      <button class="btn small" data-days="365">1 rok</button>
+      <button class="btn small" data-days="all">cały zakres</button>
+    </div>
 
     <div class="spacer"></div>
 
-    <button class="btn" id="btn-reset" title="Przywróć domyślne ustawienia">Reset</button>
+    <span class="pill hidden" id="removed-pill">
+      <span id="removed-count">0</span> usuniętych
+      <button class="btn ghost" id="btn-restore" style="color:var(--warn-tx)">przywróć</button>
+    </span>
+  </div>
+
+  <!-- Add task panel -->
+  <div class="panels">
+    <div class="panel">
+      <h3>Dodaj nowe zadanie</h3>
+      <div class="addform">
+        <label class="inline" for="add-date">Data ukończenia</label>
+        <input type="date" id="add-date">
+
+        <label class="inline">Rozmiar</label>
+        <button class="btn sz-s small on" data-add-sz="S">S</button>
+        <button class="btn sz-m small" data-add-sz="M">M</button>
+        <button class="btn sz-l small" data-add-sz="L">L</button>
+
+        <label class="inline" for="add-lt">Czas realizacji (dni)</label>
+        <input type="number" id="add-lt" min="0" step="0.1" style="width:90px">
+
+        <button class="btn btn-primary" id="btn-add">Dodaj zadanie</button>
+        <span class="msg" id="add-msg"></span>
+      </div>
+    </div>
   </div>
 
   <!-- Main scatter -->
   <div class="card">
-    <h2>Czas realizacji w czasie</h2>
+    <h2>
+      Czas realizacji w czasie
+      <span class="hint">Kliknij punkt, aby go usunąć z analizy</span>
+    </h2>
     <div id="scatter"></div>
   </div>
 
@@ -222,7 +338,8 @@
 
   <footer>
     <button class="btn" id="btn-csv">Eksport CSV (widoczne)</button>
-    <span>Percentyle obliczane metodą interpolacji liniowej (zgodnie z numpy.percentile).</span>
+    <button class="btn" id="btn-reset">Reset wszystkiego</button>
+    <span>Percentyle: interpolacja liniowa (numpy.percentile). Punkty z rombem to zadania dodane ręcznie.</span>
   </footer>
 </div>
 
@@ -412,9 +529,13 @@
 </script>
 
 <script>
-/* ----------- Data ----------- */
-const RAW = JSON.parse(document.getElementById('data').textContent);
-RAW.forEach(d => { d.lead_time = +d.lead_time; });
+/* ===========================================================
+   Data + state
+   =========================================================== */
+let __ID = 0;
+const RAW = JSON.parse(document.getElementById('data').textContent)
+  .map(d => ({ id: 'orig-'+(__ID++), date: d.date, size: d.size,
+               lead_time: +d.lead_time, source: 'orig' }));
 
 const SIZES = ['S','M','L'];
 const COLOR = { S:'#2563eb', M:'#7c3aed', L:'#db2777', ALL:'#1f2937' };
@@ -427,9 +548,20 @@ const STATE = {
   overall: true,
   pct: { p50:true, p85:true, p95:true },
   yLog: false,
+  dateFrom: null,           // ISO YYYY-MM-DD or null
+  dateTo: null,
+  removed: new Set(),       // ids
+  added: [],                // user-added records
+  addSize: 'S',
 };
 
-/* ----------- Stats helpers ----------- */
+/* Anchor "last X days" to most recent point in original data — data is historical. */
+const DATE_MIN_RAW = RAW.reduce((m,d)=>d.date<m?d.date:m, RAW[0].date);
+const DATE_MAX_RAW = RAW.reduce((m,d)=>d.date>m?d.date:m, RAW[0].date);
+
+/* ===========================================================
+   Helpers
+   =========================================================== */
 function percentile(arr, p){
   if (!arr.length) return null;
   const a = arr.slice().sort((x,y)=>x-y);
@@ -443,53 +575,104 @@ const std  = a => { if (a.length<2) return 0; const m=mean(a);
   return Math.sqrt(a.reduce((s,v)=>s+(v-m)*(v-m),0)/(a.length-1)); };
 const fmt  = (v, d=1) => v==null ? '—' : (Math.round(v*10**d)/10**d).toLocaleString('pl-PL');
 
-/* ----------- Build derived series ----------- */
-function visibleData(){
-  return RAW.filter(d => STATE.sizes.has(d.size));
+function isoAdd(iso, days){
+  const dt = new Date(iso+'T00:00:00');
+  dt.setDate(dt.getDate()+days);
+  return dt.toISOString().slice(0,10);
 }
-function groupBySize(data){
+function isoToday(){ return new Date().toISOString().slice(0,10); }
+function isoFmtPL(iso){
+  const dt = new Date(iso+'T00:00:00');
+  return dt.toLocaleDateString('pl-PL', {day:'numeric', month:'long', year:'numeric'});
+}
+function isoFmtMonthPL(iso){
+  const dt = new Date(iso+'-01T00:00:00');
+  return dt.toLocaleDateString('pl-PL', {month:'long', year:'numeric'});
+}
+
+/* Dataset pipeline:
+   ALL = RAW + added → minus removed → filter by date range → (then by size for "visible") */
+function allData(){ return RAW.concat(STATE.added); }
+
+function activeData(){
+  return allData()
+    .filter(d => !STATE.removed.has(d.id))
+    .filter(d => !STATE.dateFrom || d.date >= STATE.dateFrom)
+    .filter(d => !STATE.dateTo   || d.date <= STATE.dateTo);
+}
+function visibleData(){
+  return activeData().filter(d => STATE.sizes.has(d.size));
+}
+function groupBySize(rows){
   const g = {S:[], M:[], L:[]};
-  data.forEach(d => g[d.size].push(d.lead_time));
+  rows.forEach(d => g[d.size].push(d.lead_time));
   return g;
 }
 
-/* ----------- Plot: scatter ----------- */
+/* ===========================================================
+   Plot: scatter
+   =========================================================== */
+let SCATTER_BOUND = false;
+
 function buildScatter(){
   const data = visibleData();
-  const dateMin = RAW.reduce((m,d)=>d.date<m?d.date:m, RAW[0].date);
-  const dateMax = RAW.reduce((m,d)=>d.date>m?d.date:m, RAW[0].date);
-  // padding on x-axis
-  const pad = (iso, days) => {
-    const dt = new Date(iso); dt.setDate(dt.getDate()+days);
-    return dt.toISOString().slice(0,10);
-  };
-  const x0 = pad(dateMin, -10);
-  const x1 = pad(dateMax, +10);
+
+  // x-range padding around the *active* range (so x-axis follows date filter)
+  const active = activeData();
+  const minD = active.length ? active.reduce((m,d)=>d.date<m?d.date:m, active[0].date) : DATE_MIN_RAW;
+  const maxD = active.length ? active.reduce((m,d)=>d.date>m?d.date:m, active[0].date) : DATE_MAX_RAW;
+  const x0 = STATE.dateFrom || isoAdd(minD, -10);
+  const x1 = STATE.dateTo   || isoAdd(maxD, +10);
 
   const traces = [];
 
-  // 1) scatter per size
+  // 1) original points per size
   SIZES.forEach(sz => {
-    const rows = data.filter(d=>d.size===sz);
+    const rows = data.filter(d => d.size===sz && d.source==='orig');
     traces.push({
       type:'scatter', mode:'markers',
       name: 'Rozmiar '+sz,
       x: rows.map(d=>d.date),
       y: rows.map(d=>d.lead_time),
-      marker:{ size:11, color:COLOR[sz], opacity:0.85,
+      customdata: rows.map(d=>d.id),
+      marker:{ size:11, color:COLOR[sz], opacity:0.85, symbol:'circle',
                line:{width:1.5,color:'#fff'} },
       hovertemplate:
         '<b>Rozmiar '+sz+'</b><br>'+
         'Data: %{x|%d %b %Y}<br>'+
-        'Czas realizacji: <b>%{y}</b> dni<extra></extra>',
+        'Czas realizacji: <b>%{y}</b> dni<br>'+
+        '<i>kliknij aby usunąć</i><extra></extra>',
       legendgroup: 'sz-'+sz,
     });
   });
 
-  // 2) percentile lines — per size
+  // 1b) user-added points per size — distinct diamond marker
+  SIZES.forEach(sz => {
+    const rows = data.filter(d => d.size===sz && d.source==='user');
+    if (!rows.length) return;
+    traces.push({
+      type:'scatter', mode:'markers',
+      name: 'Rozmiar '+sz+' (dodane)',
+      x: rows.map(d=>d.date),
+      y: rows.map(d=>d.lead_time),
+      customdata: rows.map(d=>d.id),
+      marker:{ size:13, color:COLOR[sz], opacity:0.9, symbol:'diamond',
+               line:{width:2,color:'#fff'} },
+      hovertemplate:
+        '<b>Rozmiar '+sz+' (dodane ręcznie)</b><br>'+
+        'Data: %{x|%d %b %Y}<br>'+
+        'Czas realizacji: <b>%{y}</b> dni<br>'+
+        '<i>kliknij aby usunąć</i><extra></extra>',
+      legendgroup: 'sz-'+sz,
+      showlegend: true,
+    });
+  });
+
+  // 2) percentile lines — per size (computed on visible data)
   if (STATE.perSize){
     const grouped = groupBySize(data);
     SIZES.forEach(sz => {
+      if (!STATE.sizes.has(sz)) return;
       const arr = grouped[sz];
       if (!arr.length) return;
       ['p50','p85','p95'].forEach(p => {
@@ -540,34 +723,57 @@ function buildScatter(){
       type: STATE.yLog ? 'log' : 'linear',
       gridcolor:'#f1f5f9', linecolor:'#e7e5e4', zeroline:false,
       title:{text:'Czas realizacji (dni)', font:{size:12,color:'#6b7280'}},
-      rangemode:'tozero',
+      rangemode: STATE.yLog ? 'normal' : 'tozero',
     },
-    legend:{
-      orientation:'h', y:-0.18, x:0, xanchor:'left',
-      font:{size:11}, bgcolor:'rgba(0,0,0,0)',
-      itemwidth:30,
-    },
+    legend:{ orientation:'h', y:-0.18, x:0, xanchor:'left',
+             font:{size:11}, bgcolor:'rgba(0,0,0,0)', itemwidth:30 },
     hoverlabel:{ bgcolor:'#fff', bordercolor:'#d6d3d1',
                  font:{family:'Inter',size:12,color:'#111827'} },
     showlegend:true,
   };
 
-  Plotly.react('scatter', traces, layout, {displaylogo:false, responsive:true,
-    modeBarButtonsToRemove:['lasso2d','select2d','autoScale2d']});
+  const plotEl = document.getElementById('scatter');
+  Plotly.react(plotEl, traces, layout,
+    {displaylogo:false, responsive:true,
+     modeBarButtonsToRemove:['lasso2d','select2d','autoScale2d']});
+
+  // Wire click-to-remove once
+  if (!SCATTER_BOUND){
+    plotEl.on('plotly_click', (ev) => {
+      const pt = ev.points[0];
+      if (!pt || pt.data.mode !== 'markers') return;
+      const id = pt.customdata;
+      if (!id) return;
+      const r = allData().find(x => x.id === id);
+      if (!r) return;
+      const msg = `Usunąć ten punkt z analizy?\n\n`+
+                  `Data:  ${r.date}\nRozmiar:  ${r.size}\nCzas:  ${r.lead_time} dni`+
+                  (r.source==='user' ? '\n(dodany ręcznie)' : '')+
+                  `\n\nMożesz przywrócić przyciskiem „przywróć" w pasku filtrów.`;
+      if (confirm(msg)) {
+        STATE.removed.add(id);
+        renderAll();
+      }
+    });
+    SCATTER_BOUND = true;
+  }
 }
 
-/* ----------- Plot: histogram ----------- */
+/* ===========================================================
+   Plot: histogram
+   =========================================================== */
 function buildHist(){
   const data = visibleData();
+  const max = data.reduce((m,d)=>Math.max(m,d.lead_time), 0);
+  const upper = Math.ceil((max+1)/50)*50;
   const traces = SIZES.filter(sz => STATE.sizes.has(sz)).map(sz => {
     const rows = data.filter(d=>d.size===sz);
     return {
-      type:'histogram',
-      name:'Rozmiar '+sz,
+      type:'histogram', name:'Rozmiar '+sz,
       x: rows.map(d=>d.lead_time),
       marker:{ color:COLOR[sz], line:{color:'#fff',width:1} },
       opacity:0.85,
-      xbins:{ start:0, end:450, size:25 },
+      xbins:{ start:0, end: Math.max(upper, 50), size:25 },
       hovertemplate:'Rozmiar '+sz+': <b>%{y}</b> zadań<br>Zakres: %{x} dni<extra></extra>',
     };
   });
@@ -586,18 +792,21 @@ function buildHist(){
     modeBarButtonsToRemove:['lasso2d','select2d','autoScale2d']});
 }
 
-/* ----------- Plot: throughput by month ----------- */
+/* ===========================================================
+   Plot: throughput by month (only over active range)
+   =========================================================== */
 function buildThroughput(){
   const data = visibleData();
-  // bucket by YYYY-MM
   const buckets = {};
   data.forEach(d=>{
     const ym = d.date.slice(0,7);
     buckets[ym] = buckets[ym] || {S:0,M:0,L:0};
     buckets[ym][d.size] += 1;
   });
-  // Generate full month range from min to max month in RAW
-  const allYM = RAW.map(d=>d.date.slice(0,7)).sort();
+  const active = activeData();
+  const allYM = active.map(d=>d.date.slice(0,7)).sort();
+  const ymStart = allYM[0] || DATE_MIN_RAW.slice(0,7);
+  const ymEnd   = allYM[allYM.length-1] || DATE_MAX_RAW.slice(0,7);
   function* range(a,b){
     let [y,m] = a.split('-').map(Number);
     const [yb,mb] = b.split('-').map(Number);
@@ -606,12 +815,11 @@ function buildThroughput(){
       m++; if (m>12){m=1;y++;}
     }
   }
-  const months = [...range(allYM[0], allYM[allYM.length-1])];
+  const months = [...range(ymStart, ymEnd)];
   months.forEach(m=>{ buckets[m] = buckets[m]||{S:0,M:0,L:0}; });
 
   const traces = SIZES.filter(sz=>STATE.sizes.has(sz)).map(sz => ({
-    type:'bar',
-    name:'Rozmiar '+sz,
+    type:'bar', name:'Rozmiar '+sz,
     x: months,
     y: months.map(m=>buckets[m][sz]),
     marker:{color:COLOR[sz]},
@@ -633,7 +841,9 @@ function buildThroughput(){
     modeBarButtonsToRemove:['lasso2d','select2d','autoScale2d']});
 }
 
-/* ----------- KPIs ----------- */
+/* ===========================================================
+   KPIs + Forecast + header badges
+   =========================================================== */
 function updateKPIs(){
   const arr = visibleData().map(d=>d.lead_time);
   document.getElementById('k-n').textContent = arr.length;
@@ -647,9 +857,41 @@ function updateKPIs(){
     : sel.length===0 ? 'Pokazane: brak — wybierz rozmiar'
     : 'Pokazane: '+sel.join(', ');
   document.getElementById('filter-summary').textContent = txt;
+
+  // Badges
+  document.getElementById('b-count').textContent = `${arr.length} zadań widocznych / ${RAW.length+STATE.added.length} łącznie`;
+  const act = activeData();
+  if (act.length){
+    const a = act.reduce((m,d)=>d.date<m?d.date:m, act[0].date);
+    const b = act.reduce((m,d)=>d.date>m?d.date:m, act[0].date);
+    document.getElementById('b-range').textContent = `${isoFmtMonthPL(a.slice(0,7))} – ${isoFmtMonthPL(b.slice(0,7))}`;
+  }
+
+  // Forecast: P85 per size, on visible (size-filtered) data;
+  // if a size is filtered out, fall back to active (date-filtered) for that size
+  const visGrouped = groupBySize(visibleData());
+  const actGrouped = groupBySize(activeData());
+  const today = isoToday();
+  SIZES.forEach(sz => {
+    const arrSz = visGrouped[sz].length ? visGrouped[sz] : actGrouped[sz];
+    const p85 = percentile(arrSz, 85);
+    const valEl = document.getElementById('fc-'+sz.toLowerCase());
+    const etaEl = document.getElementById('fc-'+sz.toLowerCase()+'-eta');
+    if (p85 == null) {
+      valEl.innerHTML = '— <span class="unit">dni</span>';
+      etaEl.textContent = 'brak danych';
+    } else {
+      valEl.innerHTML = fmt(p85,0)+' <span class="unit">dni</span>';
+      const eta = isoAdd(today, Math.round(p85));
+      const dim = visGrouped[sz].length ? '' : ' (z aktywnych)';
+      etaEl.textContent = 'jeśli start dziś → ' + isoFmtPL(eta) + dim;
+    }
+  });
 }
 
-/* ----------- Stats table ----------- */
+/* ===========================================================
+   Stats table
+   =========================================================== */
 function updateStats(){
   const tbody = document.querySelector('#stats tbody');
   tbody.innerHTML = '';
@@ -659,7 +901,7 @@ function updateStats(){
   SIZES.forEach(sz => {
     const a = grouped[sz];
     if (!a.length) return;
-    rows.push({label:sz, color:COLOR[sz], arr:a, klass:''});
+    rows.push({label:'Rozmiar '+sz, color:COLOR[sz], arr:a, klass:''});
   });
   rows.push({label:'Łącznie (widoczne)', color:COLOR.ALL, arr:data.map(d=>d.lead_time), klass:'row-all'});
   rows.forEach(r=>{
@@ -670,27 +912,42 @@ function updateStats(){
     tr.innerHTML =
       `<td>${sw}${r.label}</td>`+
       `<td class="num">${a.length}</td>`+
-      `<td class="num">${fmt(Math.min(...a),0)}</td>`+
-      `<td class="num">${fmt(mean(a),1)}</td>`+
+      `<td class="num">${a.length?fmt(Math.min(...a),0):'—'}</td>`+
+      `<td class="num">${a.length?fmt(mean(a),1):'—'}</td>`+
       `<td class="num">${fmt(percentile(a,50),0)}</td>`+
       `<td class="num">${fmt(percentile(a,85),0)}</td>`+
       `<td class="num">${fmt(percentile(a,95),0)}</td>`+
-      `<td class="num">${fmt(Math.max(...a),0)}</td>`+
+      `<td class="num">${a.length?fmt(Math.max(...a),0):'—'}</td>`+
       `<td class="num">${fmt(std(a),1)}</td>`;
     tbody.appendChild(tr);
   });
-  if (!rows.length){
-    tbody.innerHTML = '<tr><td colspan="9" style="color:var(--muted);text-align:center;padding:18px">Brak danych — wybierz co najmniej jeden rozmiar.</td></tr>';
+  if (!rows.length || !data.length){
+    tbody.innerHTML = '<tr><td colspan="9" style="color:var(--muted);text-align:center;padding:18px">Brak danych w aktualnych filtrach.</td></tr>';
   }
 }
 
-/* ----------- Render all ----------- */
-function renderAll(){
-  buildScatter(); buildHist(); buildThroughput();
-  updateKPIs(); updateStats();
+/* ===========================================================
+   Removed pill
+   =========================================================== */
+function updateRemovedPill(){
+  const pill = document.getElementById('removed-pill');
+  const n = STATE.removed.size;
+  document.getElementById('removed-count').textContent = n;
+  pill.classList.toggle('hidden', n === 0);
 }
 
-/* ----------- Controls wiring ----------- */
+/* ===========================================================
+   Render all
+   =========================================================== */
+function renderAll(){
+  buildScatter(); buildHist(); buildThroughput();
+  updateKPIs(); updateStats(); updateRemovedPill();
+}
+
+/* ===========================================================
+   Controls wiring
+   =========================================================== */
+// Size filter
 document.querySelectorAll('.btn[data-sz]').forEach(b=>{
   b.addEventListener('click', ()=>{
     const sz = b.dataset.sz;
@@ -700,6 +957,7 @@ document.querySelectorAll('.btn[data-sz]').forEach(b=>{
   });
 });
 
+// Percentile group toggles
 function toggleBtn(id, key, holder){
   const el = document.getElementById(id);
   el.addEventListener('click', ()=>{
@@ -718,7 +976,7 @@ toggleBtn('t-overall',  'overall', STATE);
   });
 });
 
-// Y-axis toggle (mutually exclusive)
+// Y-axis
 document.getElementById('t-yaxis-linear').addEventListener('click', ()=>{
   STATE.yLog = false;
   document.getElementById('t-yaxis-linear').classList.add('on');
@@ -732,23 +990,89 @@ document.getElementById('t-yaxis-log').addEventListener('click', ()=>{
   buildScatter();
 });
 
-// Reset
-document.getElementById('btn-reset').addEventListener('click', ()=>{
-  STATE.sizes = new Set(['S','M','L']);
-  STATE.perSize = true; STATE.overall = true;
-  STATE.pct = {p50:true, p85:true, p95:true};
-  STATE.yLog = false;
-  document.querySelectorAll('.btn[data-sz]').forEach(b=>b.classList.add('on'));
-  ['t-per-size','t-overall','t-p50','t-p85','t-p95','t-yaxis-linear'].forEach(id=>document.getElementById(id).classList.add('on'));
-  document.getElementById('t-yaxis-log').classList.remove('on');
+// Date range inputs
+const dtFrom = document.getElementById('dt-from');
+const dtTo   = document.getElementById('dt-to');
+dtFrom.min = DATE_MIN_RAW; dtFrom.max = DATE_MAX_RAW;
+dtTo.min   = DATE_MIN_RAW; dtTo.max   = DATE_MAX_RAW;
+
+function syncDateInputs(){
+  dtFrom.value = STATE.dateFrom || '';
+  dtTo.value   = STATE.dateTo   || '';
+}
+dtFrom.addEventListener('change', ()=>{
+  STATE.dateFrom = dtFrom.value || null;
+  if (STATE.dateFrom && STATE.dateTo && STATE.dateFrom > STATE.dateTo){
+    STATE.dateTo = STATE.dateFrom;
+  }
+  syncDateInputs(); renderAll();
+});
+dtTo.addEventListener('change', ()=>{
+  STATE.dateTo = dtTo.value || null;
+  if (STATE.dateFrom && STATE.dateTo && STATE.dateFrom > STATE.dateTo){
+    STATE.dateFrom = STATE.dateTo;
+  }
+  syncDateInputs(); renderAll();
+});
+
+// Quick-range presets
+document.querySelectorAll('.btn[data-days]').forEach(b=>{
+  b.addEventListener('click', ()=>{
+    const v = b.dataset.days;
+    if (v === 'all'){ STATE.dateFrom = null; STATE.dateTo = null; }
+    else {
+      const days = parseInt(v, 10);
+      STATE.dateTo = DATE_MAX_RAW;
+      STATE.dateFrom = isoAdd(DATE_MAX_RAW, -days+1);
+    }
+    syncDateInputs(); renderAll();
+  });
+});
+
+// Restore removed
+document.getElementById('btn-restore').addEventListener('click', ()=>{
+  STATE.removed.clear();
   renderAll();
 });
 
-// CSV export
+// Add-task form
+const addDate = document.getElementById('add-date');
+const addLt   = document.getElementById('add-lt');
+const addMsg  = document.getElementById('add-msg');
+addDate.value = isoToday();
+document.querySelectorAll('.btn[data-add-sz]').forEach(b=>{
+  b.addEventListener('click', ()=>{
+    STATE.addSize = b.dataset.addSz;
+    document.querySelectorAll('.btn[data-add-sz]').forEach(x=>x.classList.toggle('on', x===b));
+  });
+});
+function showAddMsg(text, cls){
+  addMsg.textContent = text;
+  addMsg.className = 'msg ' + (cls||'');
+  if (cls === 'ok'){ setTimeout(()=>{ addMsg.textContent=''; addMsg.className='msg'; }, 3000); }
+}
+document.getElementById('btn-add').addEventListener('click', ()=>{
+  const d  = addDate.value;
+  const sz = STATE.addSize;
+  const lt = parseFloat(addLt.value);
+  if (!d){ showAddMsg('Podaj datę.', 'err'); return; }
+  if (!Number.isFinite(lt) || lt < 0){ showAddMsg('Podaj czas realizacji w dniach.', 'err'); return; }
+  const rec = { id:'user-'+(__ID++), date:d, size:sz, lead_time:lt, source:'user' };
+  STATE.added.push(rec);
+  // expand date range if needed so the new point is in view
+  if (STATE.dateFrom && d < STATE.dateFrom) STATE.dateFrom = d;
+  if (STATE.dateTo   && d > STATE.dateTo)   STATE.dateTo = d;
+  syncDateInputs();
+  showAddMsg('Dodano zadanie ✓', 'ok');
+  addLt.value = '';
+  renderAll();
+});
+
+// CSV export — exports currently visible rows
 document.getElementById('btn-csv').addEventListener('click', ()=>{
   const rows = visibleData();
-  const header = 'data_ukonczenia,deklarowany_rozmiar,czas_realizacji_dni\n';
-  const body = rows.map(r=>`${r.date},${r.size},${r.lead_time}`).join('\n');
+  const header = 'data_ukonczenia,deklarowany_rozmiar,czas_realizacji_dni,zrodlo\n';
+  const body = rows.map(r=>`${r.date},${r.size},${r.lead_time},${r.source}`).join('\n');
   const blob = new Blob([header+body], {type:'text/csv;charset=utf-8'});
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
@@ -757,15 +1081,40 @@ document.getElementById('btn-csv').addEventListener('click', ()=>{
   URL.revokeObjectURL(a.href);
 });
 
-/* ----------- First paint ----------- */
+// Reset everything
+document.getElementById('btn-reset').addEventListener('click', ()=>{
+  if (STATE.added.length || STATE.removed.size){
+    if (!confirm('Reset wyczyści dodane zadania i przywróci usunięte. Kontynuować?')) return;
+  }
+  STATE.sizes = new Set(['S','M','L']);
+  STATE.perSize = true; STATE.overall = true;
+  STATE.pct = {p50:true, p85:true, p95:true};
+  STATE.yLog = false;
+  STATE.dateFrom = null; STATE.dateTo = null;
+  STATE.removed.clear();
+  STATE.added.length = 0;
+  STATE.addSize = 'S';
+
+  document.querySelectorAll('.btn[data-sz]').forEach(b=>b.classList.add('on'));
+  ['t-per-size','t-overall','t-p50','t-p85','t-p95','t-yaxis-linear'].forEach(id=>document.getElementById(id).classList.add('on'));
+  document.getElementById('t-yaxis-log').classList.remove('on');
+  document.querySelectorAll('.btn[data-add-sz]').forEach(x=>x.classList.toggle('on', x.dataset.addSz==='S'));
+  addDate.value = isoToday();
+  addLt.value = '';
+  syncDateInputs();
+  renderAll();
+});
+
+/* ===========================================================
+   First paint
+   =========================================================== */
 function showLoadError(msg){
   const banner = document.createElement('div');
   banner.style.cssText = 'background:#fef2f2;border:1px solid #fecaca;color:#991b1b;'+
     'padding:12px 14px;border-radius:8px;margin:0 0 16px;font-size:13px;line-height:1.5';
   banner.innerHTML = '<b>Nie udało się załadować dashboardu.</b><br>'+msg+
-    '<br><br>Możliwe przyczyny: brak połączenia z internetem albo zablokowany skrypt zewnętrzny. '+
-    'Spróbuj otworzyć plik bezpośrednio w przeglądarce (Chrome / Firefox / Safari) — dane są osadzone w pliku, '+
-    'ale wymagana jest biblioteka Plotly z CDN.';
+    '<br><br>Otwórz plik bezpośrednio w przeglądarce (Chrome / Firefox / Safari). '+
+    'Dane są osadzone w pliku, ale wymagana jest biblioteka Plotly z CDN.';
   const wrap = document.querySelector('.wrap');
   wrap.insertBefore(banner, wrap.firstChild.nextSibling);
 }
@@ -773,7 +1122,7 @@ function showLoadError(msg){
 if (typeof Plotly === 'undefined') {
   showLoadError('Nie wczytano biblioteki Plotly (CDN).');
 } else {
-  try { renderAll(); }
+  try { syncDateInputs(); renderAll(); }
   catch (e) {
     console.error(e);
     showLoadError('Błąd JavaScript: '+ (e && e.message ? e.message : e));
