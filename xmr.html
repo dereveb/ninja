@@ -1,1 +1,1733 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Process Behaviour Chart — Team Cycle Time (XmR)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@300;400;500;600&family=IBM+Plex+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.plot.ly/plotly-2.35.2.min.js" charset="utf-8"></script>
+<script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+<style>
+  :root {
+    --bg: #EDF1F4;
+    --paper: #FFFFFF;
+    --paper-warm: #FAFBFC;
+    --ink: #0B1220;
+    --ink-soft: #2A3344;
+    --muted: #5A6470;
+    --muted-2: #8A94A0;
+    --border: #DDE3EA;
+    --border-strong: #C2CAD4;
+    --accent: #0F6E63;
+    --accent-soft: #D9ECE9;
+    --accent-deep: #094A42;
+    --typical-fill: rgba(15, 110, 99, 0.07);
+    --typical-line: rgba(15, 110, 99, 0.30);
+    --twosigma-fill: rgba(180, 83, 9, 0.04);
+    --limit: #B45309;
+    --limit-soft: rgba(180, 83, 9, 0.18);
+    --signal: #DC2626;
+    --signal-soft: #FEE2E2;
+    --ok: #166534;
+    --ok-soft: #DCFCE7;
+    --shadow-sm: 0 1px 0 rgba(11, 18, 32, 0.04);
+    --shadow-md: 0 1px 3px rgba(11, 18, 32, 0.06), 0 1px 2px rgba(11, 18, 32, 0.04);
+  }
 
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html, body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+    font-size: 14px;
+    line-height: 1.45;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  .mono { font-family: 'IBM Plex Mono', ui-monospace, 'SF Mono', Menlo, monospace; }
+
+  /* Subtle graph-paper texture for the page background — signature element */
+  body {
+    background-image:
+      linear-gradient(rgba(11, 18, 32, 0.025) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(11, 18, 32, 0.025) 1px, transparent 1px);
+    background-size: 32px 32px;
+    background-position: -1px -1px;
+  }
+
+  .layout {
+    max-width: 1280px;
+    margin: 0 auto;
+    padding: 24px 28px 64px;
+  }
+
+  /* ---------- HEADER ---------- */
+  header.masthead {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 24px;
+    padding-bottom: 18px;
+    border-bottom: 1px solid var(--border-strong);
+    margin-bottom: 28px;
+  }
+  .masthead .brand h1 {
+    font-size: 28px;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    line-height: 1.1;
+    color: var(--ink);
+  }
+  .masthead .brand .eyebrow {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 6px;
+  }
+  .masthead .brand h1 span {
+    color: var(--accent);
+  }
+  .masthead .meta {
+    text-align: right;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    color: var(--muted);
+    line-height: 1.5;
+  }
+  .masthead .meta .label {
+    color: var(--muted-2);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    font-size: 10px;
+  }
+
+  /* ---------- DATA SOURCE BAR ---------- */
+  .source-bar {
+    background: var(--paper);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 14px 18px;
+    margin-bottom: 24px;
+    display: grid;
+    grid-template-columns: 1fr auto auto auto;
+    gap: 14px;
+    align-items: center;
+    box-shadow: var(--shadow-sm);
+  }
+  .source-bar .source-info {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 12px;
+    color: var(--ink-soft);
+  }
+  .source-bar .source-info .filename { color: var(--accent); font-weight: 500; }
+  .source-bar .source-info .sub { color: var(--muted); font-size: 11px; margin-top: 2px; }
+
+  .field { display: flex; flex-direction: column; gap: 4px; }
+  .field label {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--muted);
+    font-weight: 500;
+  }
+  .field select {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 13px;
+    padding: 6px 28px 6px 10px;
+    border: 1px solid var(--border-strong);
+    background: var(--paper-warm);
+    color: var(--ink);
+    border-radius: 3px;
+    cursor: pointer;
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%235A6470' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 10px center;
+    min-width: 130px;
+  }
+  .field select:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+
+  .upload-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 9px 14px;
+    background: var(--ink);
+    color: var(--paper);
+    border: none;
+    border-radius: 3px;
+    font-family: 'IBM Plex Sans', sans-serif;
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 120ms;
+    letter-spacing: 0.02em;
+  }
+  .upload-btn:hover { background: var(--accent-deep); }
+  .upload-btn svg { width: 14px; height: 14px; }
+  #file-input { display: none; }
+
+  /* ---------- STATE BANNER ---------- */
+  .state-banner {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 16px 20px;
+    border-radius: 4px;
+    margin-bottom: 24px;
+    border: 1px solid;
+    box-shadow: var(--shadow-sm);
+  }
+  .state-banner.in-control { background: var(--ok-soft); border-color: #BBF7D0; }
+  .state-banner.out-of-control { background: var(--signal-soft); border-color: #FECACA; }
+  .state-banner .pill {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    padding: 5px 10px;
+    border-radius: 100px;
+    text-transform: uppercase;
+  }
+  .state-banner.in-control .pill { background: var(--ok); color: white; }
+  .state-banner.out-of-control .pill { background: var(--signal); color: white; }
+  .state-banner .verdict {
+    font-size: 15px;
+    font-weight: 500;
+    color: var(--ink);
+    flex: 1;
+  }
+  .state-banner .detail {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 12px;
+    color: var(--muted);
+  }
+
+  /* ---------- KPI ROW ---------- */
+  .kpi-row {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 0;
+    background: var(--paper);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    margin-bottom: 24px;
+    overflow: hidden;
+    box-shadow: var(--shadow-sm);
+  }
+  .kpi {
+    padding: 18px 20px;
+    border-right: 1px solid var(--border);
+    position: relative;
+  }
+  .kpi:last-child { border-right: none; }
+  .kpi .kpi-label {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 6px;
+    font-weight: 500;
+  }
+  .kpi .kpi-value {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 26px;
+    font-weight: 400;
+    color: var(--ink);
+    line-height: 1.1;
+    letter-spacing: -0.02em;
+  }
+  .kpi .kpi-unit {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    color: var(--muted-2);
+    margin-left: 4px;
+  }
+  .kpi .kpi-sub {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px;
+    color: var(--muted);
+    margin-top: 4px;
+  }
+  .kpi.signal-kpi .kpi-value { color: var(--signal); }
+  .kpi.signal-kpi.zero .kpi-value { color: var(--ok); }
+
+  /* ---------- CONTROL PANEL ---------- */
+  .control-panel {
+    background: var(--paper);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 14px 18px;
+    margin-bottom: 24px;
+    display: flex;
+    align-items: center;
+    gap: 8px 18px;
+    flex-wrap: wrap;
+    box-shadow: var(--shadow-sm);
+  }
+  .control-panel .panel-label {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--muted);
+    font-weight: 500;
+    margin-right: 4px;
+  }
+  .toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    user-select: none;
+    padding: 4px 0;
+  }
+  .toggle input { display: none; }
+  .toggle .switch {
+    width: 32px;
+    height: 18px;
+    background: var(--border-strong);
+    border-radius: 100px;
+    position: relative;
+    transition: background 160ms;
+    flex-shrink: 0;
+  }
+  .toggle .switch::after {
+    content: '';
+    position: absolute;
+    width: 14px;
+    height: 14px;
+    background: white;
+    border-radius: 50%;
+    top: 2px;
+    left: 2px;
+    transition: transform 160ms;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.2);
+  }
+  .toggle input:checked + .switch { background: var(--accent); }
+  .toggle input:checked + .switch::after { transform: translateX(14px); }
+  .toggle .toggle-label {
+    font-size: 13px;
+    color: var(--ink-soft);
+    font-weight: 400;
+  }
+  .toggle:hover .toggle-label { color: var(--ink); }
+
+  .panel-actions {
+    margin-left: auto;
+    display: flex;
+    gap: 8px;
+  }
+  .action-btn {
+    background: transparent;
+    border: 1px solid var(--border-strong);
+    color: var(--ink-soft);
+    padding: 6px 12px;
+    border-radius: 3px;
+    font-family: 'IBM Plex Sans', sans-serif;
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 120ms;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .action-btn:hover { background: var(--paper-warm); border-color: var(--ink-soft); }
+  .action-btn svg { width: 12px; height: 12px; }
+
+  /* ---------- CHARTS ---------- */
+  .chart-card {
+    background: var(--paper);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 18px 22px 14px;
+    margin-bottom: 18px;
+    box-shadow: var(--shadow-sm);
+  }
+  .chart-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    margin-bottom: 12px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--border);
+  }
+  .chart-header h2 {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--ink);
+    letter-spacing: -0.01em;
+  }
+  .chart-header .chart-subtitle {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    color: var(--muted);
+    margin-top: 2px;
+  }
+  .chart-header .chart-tag {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--muted);
+    background: var(--paper-warm);
+    padding: 4px 10px;
+    border: 1px solid var(--border);
+    border-radius: 3px;
+  }
+
+  .chart-container {
+    width: 100%;
+    height: 460px;
+  }
+  .chart-container.mr-chart { height: 240px; }
+
+  /* ---------- LEGEND ---------- */
+  .chart-legend {
+    display: flex;
+    gap: 18px;
+    flex-wrap: wrap;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    color: var(--muted);
+    margin-top: 6px;
+  }
+  .legend-item { display: inline-flex; align-items: center; gap: 6px; }
+  .legend-swatch {
+    display: inline-block;
+    width: 16px;
+    height: 2px;
+    background: var(--ink);
+  }
+  .legend-swatch.mean { background: var(--accent); height: 2px; }
+  .legend-swatch.typical { background: var(--typical-line); height: 12px; width: 16px; opacity: 0.5; border-radius: 1px; }
+  .legend-swatch.npl { background: repeating-linear-gradient(90deg, var(--limit) 0 4px, transparent 4px 7px); }
+  .legend-swatch.signal { background: var(--signal); width: 8px; height: 8px; border-radius: 50%; }
+  .legend-swatch.line { background: var(--ink); height: 2px; }
+
+  /* ---------- SIGNALS PANEL ---------- */
+  .grid-two {
+    display: grid;
+    grid-template-columns: 1.1fr 1fr;
+    gap: 18px;
+    margin-bottom: 18px;
+  }
+
+  .panel-card {
+    background: var(--paper);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 18px 22px;
+    box-shadow: var(--shadow-sm);
+  }
+  .panel-card h3 {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--ink);
+    margin-bottom: 14px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .panel-card h3 .count {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    background: var(--paper-warm);
+    border: 1px solid var(--border-strong);
+    padding: 2px 8px;
+    border-radius: 100px;
+    color: var(--muted);
+    font-weight: 500;
+  }
+  .panel-card h3 .count.has-signals { background: var(--signal-soft); border-color: #FECACA; color: var(--signal); }
+
+  .signal-list {
+    list-style: none;
+    max-height: 380px;
+    overflow-y: auto;
+    margin: 0 -6px;
+  }
+  .signal-item {
+    padding: 10px 12px;
+    border-radius: 3px;
+    margin-bottom: 4px;
+    font-size: 13px;
+    background: var(--signal-soft);
+    border-left: 3px solid var(--signal);
+  }
+  .signal-item .signal-head {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 12px;
+    color: var(--ink);
+    font-weight: 500;
+  }
+  .signal-item .signal-rules {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    color: var(--muted);
+    margin-top: 3px;
+  }
+  .signal-item .signal-rules .rule-tag {
+    display: inline-block;
+    margin-right: 6px;
+    color: var(--signal);
+  }
+  .no-signals {
+    text-align: center;
+    padding: 40px 20px;
+    color: var(--muted);
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 12px;
+  }
+  .no-signals .ok-icon {
+    display: inline-block;
+    width: 36px;
+    height: 36px;
+    line-height: 36px;
+    background: var(--ok-soft);
+    color: var(--ok);
+    border-radius: 50%;
+    font-size: 20px;
+    margin-bottom: 8px;
+  }
+
+  /* ---------- INTERPRETATION ---------- */
+  .interpretation {
+    font-size: 13px;
+    color: var(--ink-soft);
+    line-height: 1.6;
+  }
+  .interpretation p { margin-bottom: 10px; }
+  .interpretation strong { color: var(--ink); font-weight: 600; }
+  .interpretation .formula {
+    font-family: 'IBM Plex Mono', monospace;
+    background: var(--paper-warm);
+    border: 1px solid var(--border);
+    padding: 8px 12px;
+    border-radius: 3px;
+    font-size: 12px;
+    color: var(--ink-soft);
+    margin: 8px 0;
+    display: block;
+  }
+  .interpretation .rules-list {
+    list-style: none;
+    margin-top: 8px;
+  }
+  .interpretation .rules-list li {
+    padding: 6px 0 6px 22px;
+    position: relative;
+    font-size: 12px;
+    color: var(--muted);
+    font-family: 'IBM Plex Mono', monospace;
+  }
+  .interpretation .rules-list li::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 11px;
+    width: 14px;
+    height: 1px;
+    background: var(--accent);
+  }
+  .interpretation .rules-list li strong {
+    color: var(--accent);
+    font-weight: 500;
+    margin-right: 6px;
+  }
+
+  /* ---------- DATA TABLE ---------- */
+  .table-card {
+    background: var(--paper);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    box-shadow: var(--shadow-sm);
+    overflow: hidden;
+  }
+  .table-header {
+    padding: 14px 22px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    cursor: pointer;
+    user-select: none;
+  }
+  .table-header h3 {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--ink);
+  }
+  .table-header .toggle-arrow {
+    color: var(--muted);
+    transition: transform 200ms;
+  }
+  .table-card.collapsed .toggle-arrow { transform: rotate(-90deg); }
+  .table-card.collapsed .table-body { display: none; }
+  .table-body { max-height: 400px; overflow-y: auto; }
+  table.data-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 12px;
+  }
+  table.data-table thead th {
+    background: var(--paper-warm);
+    text-align: left;
+    padding: 10px 18px;
+    font-size: 10px;
+    font-weight: 500;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--muted);
+    border-bottom: 1px solid var(--border);
+    position: sticky;
+    top: 0;
+  }
+  table.data-table tbody td {
+    padding: 8px 18px;
+    border-bottom: 1px solid var(--border);
+    color: var(--ink-soft);
+  }
+  table.data-table tbody tr.signal-row td { background: var(--signal-soft); }
+  table.data-table tbody tr.signal-row td:first-child {
+    border-left: 3px solid var(--signal);
+    padding-left: 15px;
+    font-weight: 500;
+  }
+  table.data-table tbody tr:hover td { background: rgba(15, 110, 99, 0.04); }
+  table.data-table tbody tr.signal-row:hover td { background: #FECACA; }
+  table.data-table tbody td.val { font-weight: 500; color: var(--ink); }
+
+  /* ---------- FOOTER ---------- */
+  footer {
+    margin-top: 32px;
+    padding-top: 18px;
+    border-top: 1px solid var(--border-strong);
+    text-align: center;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    color: var(--muted);
+    letter-spacing: 0.04em;
+  }
+  footer a { color: var(--accent); text-decoration: none; }
+  footer a:hover { text-decoration: underline; }
+
+  /* ---------- DRAG OVERLAY ---------- */
+  .drag-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 110, 99, 0.92);
+    z-index: 1000;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    color: white;
+    font-family: 'IBM Plex Sans', sans-serif;
+  }
+  .drag-overlay.show { display: flex; }
+  .drag-overlay .big {
+    font-size: 32px;
+    font-weight: 500;
+    margin-bottom: 8px;
+    letter-spacing: -0.02em;
+  }
+  .drag-overlay .small {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 12px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    opacity: 0.8;
+  }
+  .drag-overlay svg {
+    width: 64px;
+    height: 64px;
+    margin-bottom: 18px;
+    stroke-width: 1.5;
+  }
+
+  /* ---------- RESPONSIVE ---------- */
+  @media (max-width: 1080px) {
+    .kpi-row { grid-template-columns: repeat(3, 1fr); }
+    .kpi:nth-child(3) { border-right: none; }
+    .kpi:nth-child(4), .kpi:nth-child(5) {
+      border-top: 1px solid var(--border);
+    }
+    .kpi:nth-child(4) { border-right: 1px solid var(--border); }
+    .grid-two { grid-template-columns: 1fr; }
+  }
+  @media (max-width: 720px) {
+    .layout { padding: 16px 14px 48px; }
+    .masthead { flex-direction: column; align-items: flex-start; gap: 8px; }
+    .masthead .meta { text-align: left; }
+    .source-bar { grid-template-columns: 1fr; }
+    .kpi-row { grid-template-columns: repeat(2, 1fr); }
+    .kpi { border-right: 1px solid var(--border) !important; }
+    .kpi:nth-child(2n) { border-right: none !important; }
+    .kpi:nth-child(n+3) { border-top: 1px solid var(--border); }
+    .chart-container { height: 380px; }
+    .chart-container.mr-chart { height: 200px; }
+    body { background-size: 24px 24px; }
+  }
+
+  /* ---------- PRINT ---------- */
+  @media print {
+    body { background: white; }
+    .source-bar, .control-panel, .upload-btn, .action-btn, footer { display: none !important; }
+    .chart-card, .panel-card, .kpi-row, .table-card, .state-banner {
+      box-shadow: none;
+      page-break-inside: avoid;
+    }
+  }
+
+</style>
+</head>
+<body>
+
+<div class="drag-overlay" id="drag-overlay">
+  <svg fill="none" viewBox="0 0 24 24" stroke="currentColor">
+    <path stroke-linecap="round" stroke-linejoin="round" d="M7 16a4 4 0 01-.88-7.9 5 5 0 019.76-1.1A4 4 0 0117 16M9 12l3-3m0 0l3 3m-3-3v9"/>
+  </svg>
+  <div class="big">Upuść plik tutaj</div>
+  <div class="small">.xlsx · .csv</div>
+</div>
+
+<div class="layout">
+
+  <!-- HEADER -->
+  <header class="masthead">
+    <div class="brand">
+      <div class="eyebrow">XmR · Process Behaviour Chart</div>
+      <h1>Team Cycle Time <span>Analysis</span></h1>
+    </div>
+    <div class="meta">
+      <div><span class="label">Method</span> · Shewhart / Wheeler</div>
+      <div><span class="label">Limits</span> · X̄ ± 2,66 · mR̄</div>
+      <div id="meta-updated"><span class="label">Updated</span> · —</div>
+    </div>
+  </header>
+
+  <!-- SOURCE BAR -->
+  <div class="source-bar">
+    <div class="source-info">
+      <div>Źródło: <span class="filename" id="source-name">Team_Cycle_Time_for_XMR.xlsx</span></div>
+      <div class="sub" id="source-sub">Dane z tabeli i dalsze opcje · 30 obserwacji</div>
+    </div>
+
+    <div class="field">
+      <label>Arkusz</label>
+      <select id="sheet-select"><option>—</option></select>
+    </div>
+
+    <div class="field">
+      <label>Metryka</label>
+      <select id="metric-select"><option>Cycle Time</option></select>
+    </div>
+
+    <button class="upload-btn" id="upload-trigger">
+      <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M16 8l-4-4m0 0L8 8m4-4v12"/>
+      </svg>
+      Wgraj plik
+    </button>
+    <input type="file" id="file-input" accept=".xlsx,.xls,.csv">
+  </div>
+
+  <!-- STATE BANNER -->
+  <div class="state-banner in-control" id="state-banner">
+    <span class="pill" id="state-pill">In control</span>
+    <div class="verdict" id="state-verdict">Proces zachowuje się w kontroli statystycznej.</div>
+    <div class="detail" id="state-detail">0 sygnałów wykrytych</div>
+  </div>
+
+  <!-- KPI ROW -->
+  <div class="kpi-row">
+    <div class="kpi">
+      <div class="kpi-label">N</div>
+      <div class="kpi-value mono" id="kpi-n">30</div>
+      <div class="kpi-sub">obserwacji</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">X̄ · Średnia</div>
+      <div class="kpi-value mono"><span id="kpi-mean">23,80</span><span class="kpi-unit" id="kpi-unit-1">d</span></div>
+      <div class="kpi-sub">centerline</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">mR̄ · Avg Range</div>
+      <div class="kpi-value mono"><span id="kpi-mrbar">18,00</span><span class="kpi-unit" id="kpi-unit-2">d</span></div>
+      <div class="kpi-sub">moving range</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">σ̂ · Sigma</div>
+      <div class="kpi-value mono"><span id="kpi-sigma">15,96</span><span class="kpi-unit" id="kpi-unit-3">d</span></div>
+      <div class="kpi-sub">mR̄ / 1,128</div>
+    </div>
+    <div class="kpi signal-kpi zero" id="kpi-signal-card">
+      <div class="kpi-label">Sygnały</div>
+      <div class="kpi-value mono" id="kpi-signals">0</div>
+      <div class="kpi-sub" id="kpi-signals-sub">brak sygnałów</div>
+    </div>
+  </div>
+
+  <!-- CONTROL PANEL -->
+  <div class="control-panel">
+    <span class="panel-label">Widoczność</span>
+
+    <label class="toggle">
+      <input type="checkbox" id="t-typical" checked>
+      <span class="switch"></span>
+      <span class="toggle-label">Zmienność typowa (±1σ)</span>
+    </label>
+
+    <label class="toggle">
+      <input type="checkbox" id="t-2sigma">
+      <span class="switch"></span>
+      <span class="toggle-label">Strefa ostrzegawcza (±2σ)</span>
+    </label>
+
+    <label class="toggle">
+      <input type="checkbox" id="t-npl">
+      <span class="switch"></span>
+      <span class="toggle-label">Natural Process Limits (UNPL/LNPL)</span>
+    </label>
+
+    <label class="toggle">
+      <input type="checkbox" id="t-signals" checked>
+      <span class="switch"></span>
+      <span class="toggle-label">Podświetlaj sygnały</span>
+    </label>
+
+    <label class="toggle">
+      <input type="checkbox" id="t-floor" checked>
+      <span class="switch"></span>
+      <span class="toggle-label">LNPL ≥ 0</span>
+    </label>
+
+    <label class="toggle">
+      <input type="checkbox" id="t-mr" checked>
+      <span class="switch"></span>
+      <span class="toggle-label">Wykres mR</span>
+    </label>
+
+    <div class="panel-actions">
+      <button class="action-btn" id="export-btn">
+        <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M8 12l4 4m0 0l4-4m-4 4V4"/>
+        </svg>
+        Eksport PNG
+      </button>
+      <button class="action-btn" id="print-btn">
+        <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/>
+        </svg>
+        Drukuj
+      </button>
+    </div>
+  </div>
+
+  <!-- X CHART -->
+  <div class="chart-card">
+    <div class="chart-header">
+      <div>
+        <h2>X Chart · Wartości indywidualne</h2>
+        <div class="chart-subtitle">Każdy punkt to jedna ukończona praca · oś X = kolejność zamknięcia</div>
+      </div>
+      <div class="chart-tag" id="x-chart-tag">Cycle Time · dni</div>
+    </div>
+    <div class="chart-container" id="x-chart"></div>
+    <div class="chart-legend">
+      <span class="legend-item"><span class="legend-swatch line"></span> Wartość</span>
+      <span class="legend-item"><span class="legend-swatch mean"></span> X̄ (średnia)</span>
+      <span class="legend-item"><span class="legend-swatch typical"></span> Zmienność typowa</span>
+      <span class="legend-item"><span class="legend-swatch npl"></span> UNPL / LNPL</span>
+      <span class="legend-item"><span class="legend-swatch signal"></span> Sygnał</span>
+    </div>
+  </div>
+
+  <!-- mR CHART -->
+  <div class="chart-card" id="mr-chart-card">
+    <div class="chart-header">
+      <div>
+        <h2>mR Chart · Zakres ruchomy</h2>
+        <div class="chart-subtitle">|Xᵢ − Xᵢ₋₁| · zmienność krótkookresowa między kolejnymi punktami</div>
+      </div>
+      <div class="chart-tag">URL = 3,268 · mR̄</div>
+    </div>
+    <div class="chart-container mr-chart" id="mr-chart"></div>
+  </div>
+
+  <!-- SIGNALS + INTERPRETATION -->
+  <div class="grid-two">
+    <div class="panel-card">
+      <h3>
+        Wykryte sygnały
+        <span class="count" id="signals-count">0</span>
+      </h3>
+      <ul class="signal-list" id="signal-list">
+        <li class="no-signals">
+          <div class="ok-icon">✓</div>
+          <div>Brak sygnałów — proces przewidywalny</div>
+        </li>
+      </ul>
+    </div>
+
+    <div class="panel-card">
+      <h3>Reguły detekcji</h3>
+      <div class="interpretation">
+        <p><strong>Process Behaviour Chart (XmR)</strong> rozdziela rutynową zmienność od sygnałów wymagających uwagi. Sygnał ≠ błąd — to powód, by zbadać konkretny przypadek.</p>
+        <span class="formula">UNPL = X̄ + 2,66 · mR̄ &nbsp;·&nbsp; LNPL = X̄ − 2,66 · mR̄</span>
+        <p><strong>Reguły Wheelera</strong> stosowane do detekcji:</p>
+        <ul class="rules-list">
+          <li><strong>R1</strong> Pojedynczy punkt poza UNPL lub LNPL</li>
+          <li><strong>R2</strong> Osiem kolejnych punktów po tej samej stronie X̄</li>
+          <li><strong>R3</strong> Trzy z czterech kolejnych w zewnętrznej strefie (poza ±2σ)</li>
+          <li><strong>R4</strong> Sześć kolejnych w trendzie rosnącym lub malejącym</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- DATA TABLE -->
+  <div class="table-card" id="table-card">
+    <div class="table-header" id="table-toggle">
+      <h3>Dane źródłowe</h3>
+      <svg class="toggle-arrow" width="14" height="14" viewBox="0 0 14 14" fill="none">
+        <path d="M3 5l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+      </svg>
+    </div>
+    <div class="table-body">
+      <table class="data-table" id="data-table">
+        <thead><tr></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </div>
+
+  <footer>
+    Process Behaviour Chart · XmR · Method by Walter Shewhart &amp; Donald Wheeler<br>
+    Dashboard działa offline po pierwszym wczytaniu · publikuj jako GitHub Pages
+  </footer>
+
+</div>
+
+<script>
+/* =========================================================================
+   EMBEDDED DEFAULT DATA — exactly as parsed from
+   Team_Cycle_Time_for_XMR.xlsx
+   ========================================================================= */
+const DEFAULT_DATA = {
+  source: "Team_Cycle_Time_for_XMR.xlsx",
+  sheet: "Dane z tabeli i dalsze opcje",
+  columns: ["ID", "Started", "Closed", "Cycle Time"],
+  rows: [
+    {"ID":1,"Started":"2023-11-28","Closed":"2024-01-05","Cycle Time":38},
+    {"ID":2,"Started":"2023-12-20","Closed":"2024-01-11","Cycle Time":24},
+    {"ID":3,"Started":"2024-01-02","Closed":"2024-01-16","Cycle Time":14},
+    {"ID":4,"Started":"2024-01-10","Closed":"2024-01-17","Cycle Time":9},
+    {"ID":5,"Started":"2024-01-18","Closed":"2024-01-22","Cycle Time":4},
+    {"ID":6,"Started":"2024-01-03","Closed":"2024-01-26","Cycle Time":25},
+    {"ID":7,"Started":"2024-01-10","Closed":"2024-01-29","Cycle Time":19},
+    {"ID":8,"Started":"2023-12-19","Closed":"2024-02-06","Cycle Time":51},
+    {"ID":9,"Started":"2023-12-26","Closed":"2024-02-12","Cycle Time":48},
+    {"ID":10,"Started":"2024-02-02","Closed":"2024-02-15","Cycle Time":15},
+    {"ID":11,"Started":"2024-01-26","Closed":"2024-02-17","Cycle Time":22},
+    {"ID":12,"Started":"2024-01-09","Closed":"2024-02-18","Cycle Time":42},
+    {"ID":13,"Started":"2024-02-02","Closed":"2024-02-19","Cycle Time":17},
+    {"ID":14,"Started":"2024-02-16","Closed":"2024-02-21","Cycle Time":7},
+    {"ID":15,"Started":"2024-02-23","Closed":"2024-02-28","Cycle Time":5},
+    {"ID":16,"Started":"2024-02-20","Closed":"2024-03-12","Cycle Time":20},
+    {"ID":17,"Started":"2024-01-12","Closed":"2024-03-14","Cycle Time":63},
+    {"ID":18,"Started":"2024-03-13","Closed":"2024-03-19","Cycle Time":6},
+    {"ID":19,"Started":"2024-01-25","Closed":"2024-03-20","Cycle Time":56},
+    {"ID":20,"Started":"2024-02-28","Closed":"2024-03-22","Cycle Time":24},
+    {"ID":21,"Started":"2024-02-28","Closed":"2024-03-22","Cycle Time":22},
+    {"ID":22,"Started":"2024-02-06","Closed":"2024-03-26","Cycle Time":50},
+    {"ID":23,"Started":"2024-03-21","Closed":"2024-03-27","Cycle Time":8},
+    {"ID":24,"Started":"2024-03-26","Closed":"2024-03-28","Cycle Time":2},
+    {"ID":25,"Started":"2024-03-28","Closed":"2024-03-29","Cycle Time":3},
+    {"ID":26,"Started":"2024-03-22","Closed":"2024-03-30","Cycle Time":8},
+    {"ID":27,"Started":"2024-02-26","Closed":"2024-04-01","Cycle Time":36},
+    {"ID":28,"Started":"2024-03-06","Closed":"2024-04-02","Cycle Time":27},
+    {"ID":29,"Started":"2024-03-13","Closed":"2024-04-09","Cycle Time":29},
+    {"ID":30,"Started":"2024-03-20","Closed":"2024-04-09","Cycle Time":20}
+  ]
+};
+
+/* =========================================================================
+   STATE
+   ========================================================================= */
+const state = {
+  workbook: null,           // SheetJS workbook if uploaded
+  sheets: {},               // { sheetName: [rowObj, ...] }
+  currentSheet: DEFAULT_DATA.sheet,
+  currentMetric: "Cycle Time",
+  labelColumn: null,        // optional column for x-axis labels
+  rows: DEFAULT_DATA.rows,
+  fileName: DEFAULT_DATA.source,
+  options: {
+    showTypical: true,
+    show2Sigma: false,
+    showNPL: false,
+    showSignals: true,
+    floorAtZero: true,
+    showMR: true
+  }
+};
+
+state.sheets[DEFAULT_DATA.sheet] = DEFAULT_DATA.rows;
+
+/* =========================================================================
+   FORMATTING
+   ========================================================================= */
+const fmt = (v, d = 2) => {
+  if (v === null || v === undefined || isNaN(v)) return "—";
+  return Number(v).toLocaleString('pl-PL', { minimumFractionDigits: d, maximumFractionDigits: d });
+};
+const fmt1 = (v) => fmt(v, 1);
+const fmt2 = (v) => fmt(v, 2);
+const fmtInt = (v) => Number(v).toLocaleString('pl-PL');
+
+/* =========================================================================
+   XmR STATISTICS
+   ========================================================================= */
+function computeXmR(values, opts = {}) {
+  const n = values.length;
+  if (n < 2) return null;
+
+  const mean = values.reduce((a, b) => a + b, 0) / n;
+
+  const mr = [];
+  for (let i = 1; i < n; i++) mr.push(Math.abs(values[i] - values[i - 1]));
+  const mrBar = mr.reduce((a, b) => a + b, 0) / mr.length;
+
+  const sigma = mrBar / 1.128;
+
+  const unplRaw = mean + 2.66 * mrBar;
+  let lnplRaw = mean - 2.66 * mrBar;
+  const lnpl = opts.floorAtZero ? Math.max(0, lnplRaw) : lnplRaw;
+  const unpl = unplRaw;
+
+  const url = 3.268 * mrBar;
+
+  return {
+    n, mean, mr, mrBar, sigma,
+    unpl, lnpl, unplRaw, lnplRaw, url,
+    upper1s: mean + sigma,
+    lower1s: opts.floorAtZero ? Math.max(0, mean - sigma) : mean - sigma,
+    upper2s: mean + 2 * sigma,
+    lower2s: opts.floorAtZero ? Math.max(0, mean - 2 * sigma) : mean - 2 * sigma
+  };
+}
+
+/* =========================================================================
+   SIGNAL DETECTION — Wheeler's rules
+   ========================================================================= */
+function detectSignals(values, stats) {
+  const { mean, unpl, lnpl, upper2s, lower2s } = stats;
+  const signals = values.map(() => ({ flags: [], outOfLimits: false }));
+
+  values.forEach((v, i) => {
+    // R1: outside NPL
+    if (v > unpl)        { signals[i].flags.push({ rule: 'R1', desc: 'Powyżej UNPL' });        signals[i].outOfLimits = true; }
+    if (v < lnpl)        { signals[i].flags.push({ rule: 'R1', desc: 'Poniżej LNPL' });        signals[i].outOfLimits = true; }
+
+    // R2: 8 consecutive on same side of mean
+    if (i >= 7) {
+      const slice = values.slice(i - 7, i + 1);
+      if (slice.every(x => x > mean)) signals[i].flags.push({ rule: 'R2', desc: '8 punktów powyżej X̄' });
+      else if (slice.every(x => x < mean)) signals[i].flags.push({ rule: 'R2', desc: '8 punktów poniżej X̄' });
+    }
+
+    // R3: 3 of 4 consecutive beyond ±2σ on same side
+    if (i >= 3) {
+      const slice = values.slice(i - 3, i + 1);
+      const above2s = slice.filter(x => x > upper2s).length;
+      const below2s = slice.filter(x => x < lower2s).length;
+      if (above2s >= 3 && v > upper2s) signals[i].flags.push({ rule: 'R3', desc: '3 z 4 powyżej +2σ' });
+      if (below2s >= 3 && v < lower2s) signals[i].flags.push({ rule: 'R3', desc: '3 z 4 poniżej −2σ' });
+    }
+
+    // R4: 6 consecutive trending up or down
+    if (i >= 5) {
+      const slice = values.slice(i - 5, i + 1);
+      let inc = true, dec = true;
+      for (let j = 1; j < 6; j++) {
+        if (slice[j] <= slice[j - 1]) inc = false;
+        if (slice[j] >= slice[j - 1]) dec = false;
+      }
+      if (inc) signals[i].flags.push({ rule: 'R4', desc: 'Trend rosnący (6+)' });
+      if (dec) signals[i].flags.push({ rule: 'R4', desc: 'Trend malejący (6+)' });
+    }
+  });
+
+  return signals;
+}
+
+/* =========================================================================
+   COLUMN ANALYSIS — pick numeric columns + label candidates
+   ========================================================================= */
+function analyzeColumns(rows) {
+  if (!rows || rows.length === 0) return { numeric: [], labels: [] };
+  const cols = Object.keys(rows[0]);
+  const numeric = [];
+  const labels = [];
+
+  cols.forEach(col => {
+    const vals = rows.map(r => r[col]).filter(v => v !== null && v !== undefined && v !== '');
+    const numCount = vals.filter(v => typeof v === 'number' || (!isNaN(parseFloat(v)) && isFinite(v))).length;
+    const numericRatio = vals.length > 0 ? numCount / vals.length : 0;
+
+    if (numericRatio > 0.85 && vals.length > 0) {
+      numeric.push(col);
+    }
+    // Label candidates: dates, IDs, strings
+    labels.push(col);
+  });
+
+  return { numeric, labels };
+}
+
+function getNumericValues(rows, col) {
+  return rows.map(r => {
+    const v = r[col];
+    if (typeof v === 'number') return v;
+    const parsed = parseFloat(v);
+    return isFinite(parsed) ? parsed : null;
+  }).filter(v => v !== null);
+}
+
+/* =========================================================================
+   X-AXIS LABEL GUESSING
+   ========================================================================= */
+function pickLabelColumn(rows, metric) {
+  const cols = Object.keys(rows[0]);
+  // Priority: Closed > Date > Started > ID
+  for (const cand of ['Closed', 'closed', 'Date', 'date', 'Data', 'Started', 'started', 'ID', 'id']) {
+    if (cols.includes(cand) && cand !== metric) return cand;
+  }
+  // Fallback: first non-numeric/non-metric column
+  for (const c of cols) {
+    if (c !== metric) return c;
+  }
+  return null;
+}
+
+/* =========================================================================
+   RENDER X CHART
+   ========================================================================= */
+const ACCENT = '#0F6E63';
+const INK = '#0B1220';
+const INK_SOFT = '#2A3344';
+const MUTED = '#8A94A0';
+const LIMIT = '#B45309';
+const SIGNAL = '#DC2626';
+const GRID = 'rgba(11, 18, 32, 0.06)';
+const TYPICAL_FILL = 'rgba(15, 110, 99, 0.08)';
+const TWOSIGMA_FILL = 'rgba(180, 83, 9, 0.05)';
+
+function renderXChart(values, labels, stats, signals) {
+  const x = labels;
+  const n = values.length;
+
+  // Per-point coloring
+  const signalsActive = state.options.showSignals;
+  const markerColors = values.map((v, i) =>
+    signalsActive && signals[i].flags.length > 0 ? SIGNAL : INK
+  );
+  const markerSizes = values.map((v, i) =>
+    signalsActive && signals[i].flags.length > 0 ? 9 : 6
+  );
+  const markerLines = values.map((v, i) =>
+    signalsActive && signals[i].flags.length > 0
+      ? { color: SIGNAL, width: 2 }
+      : { color: 'white', width: 1.5 }
+  );
+
+  const hoverText = values.map((v, i) => {
+    const flags = signals[i].flags;
+    let txt = `<b>${labels[i]}</b><br>Wartość: <b>${fmt1(v)}</b>`;
+    if (flags.length > 0) {
+      txt += `<br><span style="color:${SIGNAL}">⚠ ${flags.map(f => f.rule).join(', ')}</span>`;
+    }
+    return txt;
+  });
+
+  const traces = [];
+
+  // Typical variation zone (±1σ) — filled
+  if (state.options.showTypical) {
+    const x1 = [...x, ...[...x].reverse()];
+    const y1 = [
+      ...Array(n).fill(stats.upper1s),
+      ...Array(n).fill(stats.lower1s)
+    ];
+    traces.push({
+      x: x1, y: y1,
+      fill: 'toself',
+      fillcolor: TYPICAL_FILL,
+      line: { color: 'rgba(0,0,0,0)' },
+      hoverinfo: 'skip',
+      showlegend: false,
+      name: 'Typical ±1σ'
+    });
+  }
+
+  // ±2σ zone — filled (warning zone)
+  if (state.options.show2Sigma) {
+    const x2 = [...x, ...[...x].reverse()];
+    const y2 = [
+      ...Array(n).fill(stats.upper2s),
+      ...Array(n).fill(stats.lower2s)
+    ];
+    traces.push({
+      x: x2, y: y2,
+      fill: 'toself',
+      fillcolor: TWOSIGMA_FILL,
+      line: { color: 'rgba(0,0,0,0)' },
+      hoverinfo: 'skip',
+      showlegend: false,
+      name: '±2σ'
+    });
+  }
+
+  // Main line + markers
+  traces.push({
+    x, y: values,
+    mode: 'lines+markers',
+    line: { color: INK, width: 1.5, shape: 'linear' },
+    marker: {
+      color: markerColors,
+      size: markerSizes,
+      line: markerLines,
+      symbol: 'circle'
+    },
+    hovertemplate: hoverText.map(t => t + '<extra></extra>'),
+    text: hoverText,
+    name: state.currentMetric,
+    showlegend: false
+  });
+
+  const shapes = [];
+  const annotations = [];
+
+  // Mean line
+  shapes.push({
+    type: 'line', xref: 'paper', x0: 0, x1: 1,
+    y0: stats.mean, y1: stats.mean,
+    line: { color: ACCENT, width: 2 }
+  });
+  annotations.push({
+    xref: 'paper', x: 1.001, xanchor: 'left',
+    y: stats.mean, yanchor: 'middle',
+    text: `X̄ ${fmt1(stats.mean)}`,
+    showarrow: false,
+    font: { family: 'IBM Plex Mono', size: 11, color: ACCENT }
+  });
+
+  // NPL lines
+  if (state.options.showNPL) {
+    shapes.push({
+      type: 'line', xref: 'paper', x0: 0, x1: 1,
+      y0: stats.unpl, y1: stats.unpl,
+      line: { color: LIMIT, width: 1.5, dash: 'dash' }
+    });
+    shapes.push({
+      type: 'line', xref: 'paper', x0: 0, x1: 1,
+      y0: stats.lnpl, y1: stats.lnpl,
+      line: { color: LIMIT, width: 1.5, dash: 'dash' }
+    });
+    annotations.push({
+      xref: 'paper', x: 1.001, xanchor: 'left',
+      y: stats.unpl, yanchor: 'middle',
+      text: `UNPL ${fmt1(stats.unpl)}`,
+      showarrow: false,
+      font: { family: 'IBM Plex Mono', size: 11, color: LIMIT }
+    });
+    annotations.push({
+      xref: 'paper', x: 1.001, xanchor: 'left',
+      y: stats.lnpl, yanchor: 'middle',
+      text: `LNPL ${fmt1(stats.lnpl)}`,
+      showarrow: false,
+      font: { family: 'IBM Plex Mono', size: 11, color: LIMIT }
+    });
+  }
+
+  // Y-range calculation
+  let yMin = Math.min(...values, stats.lnpl);
+  let yMax = Math.max(...values, stats.unpl);
+  if (state.options.showNPL) {
+    yMin = Math.min(yMin, stats.lnpl);
+    yMax = Math.max(yMax, stats.unpl);
+  }
+  const yPad = (yMax - yMin) * 0.10;
+  yMin = state.options.floorAtZero ? Math.max(0, yMin - yPad) : yMin - yPad;
+  yMax = yMax + yPad;
+
+  const layout = {
+    margin: { t: 10, r: 110, b: 50, l: 56 },
+    paper_bgcolor: 'white',
+    plot_bgcolor: 'white',
+    font: { family: 'IBM Plex Sans, sans-serif', size: 12, color: INK_SOFT },
+    xaxis: {
+      showgrid: true, gridcolor: GRID, gridwidth: 1,
+      tickfont: { family: 'IBM Plex Mono', size: 10, color: MUTED },
+      zeroline: false,
+      type: 'category',
+      automargin: true,
+      tickangle: n > 20 ? -30 : 0,
+      title: { text: state.labelColumn || '', font: { size: 11, color: MUTED } }
+    },
+    yaxis: {
+      showgrid: true, gridcolor: GRID, gridwidth: 1,
+      tickfont: { family: 'IBM Plex Mono', size: 11, color: MUTED },
+      zeroline: false,
+      range: [yMin, yMax],
+      title: { text: state.currentMetric, font: { size: 11, color: MUTED } }
+    },
+    shapes,
+    annotations,
+    hoverlabel: {
+      bgcolor: INK,
+      bordercolor: INK,
+      font: { family: 'IBM Plex Sans', size: 12, color: 'white' }
+    },
+    showlegend: false
+  };
+
+  const config = {
+    displayModeBar: false,
+    responsive: true
+  };
+
+  Plotly.newPlot('x-chart', traces, layout, config);
+}
+
+/* =========================================================================
+   RENDER mR CHART
+   ========================================================================= */
+function renderMRChart(mr, labels, stats) {
+  const mrLabels = labels.slice(1);
+  const markerColors = mr.map(v => v > stats.url ? SIGNAL : INK_SOFT);
+  const markerSizes = mr.map(v => v > stats.url ? 8 : 5);
+
+  const traces = [{
+    x: mrLabels, y: mr,
+    mode: 'lines+markers',
+    line: { color: INK_SOFT, width: 1.2 },
+    marker: {
+      color: markerColors, size: markerSizes,
+      line: { color: 'white', width: 1 }
+    },
+    hovertemplate: '<b>%{x}</b><br>mR: <b>%{y:.1f}</b><extra></extra>',
+    name: 'mR'
+  }];
+
+  const shapes = [
+    {
+      type: 'line', xref: 'paper', x0: 0, x1: 1,
+      y0: stats.mrBar, y1: stats.mrBar,
+      line: { color: ACCENT, width: 2 }
+    },
+    {
+      type: 'line', xref: 'paper', x0: 0, x1: 1,
+      y0: stats.url, y1: stats.url,
+      line: { color: LIMIT, width: 1.5, dash: 'dash' }
+    }
+  ];
+
+  const annotations = [
+    {
+      xref: 'paper', x: 1.001, xanchor: 'left',
+      y: stats.mrBar, yanchor: 'middle',
+      text: `mR̄ ${fmt1(stats.mrBar)}`,
+      showarrow: false,
+      font: { family: 'IBM Plex Mono', size: 11, color: ACCENT }
+    },
+    {
+      xref: 'paper', x: 1.001, xanchor: 'left',
+      y: stats.url, yanchor: 'middle',
+      text: `URL ${fmt1(stats.url)}`,
+      showarrow: false,
+      font: { family: 'IBM Plex Mono', size: 11, color: LIMIT }
+    }
+  ];
+
+  const yMax = Math.max(...mr, stats.url) * 1.12;
+
+  const layout = {
+    margin: { t: 10, r: 110, b: 50, l: 56 },
+    paper_bgcolor: 'white',
+    plot_bgcolor: 'white',
+    font: { family: 'IBM Plex Sans, sans-serif', size: 12, color: INK_SOFT },
+    xaxis: {
+      showgrid: true, gridcolor: GRID,
+      tickfont: { family: 'IBM Plex Mono', size: 10, color: MUTED },
+      type: 'category', automargin: true,
+      tickangle: mrLabels.length > 20 ? -30 : 0,
+      zeroline: false
+    },
+    yaxis: {
+      showgrid: true, gridcolor: GRID,
+      tickfont: { family: 'IBM Plex Mono', size: 11, color: MUTED },
+      range: [0, yMax],
+      zeroline: false,
+      title: { text: 'Moving Range', font: { size: 11, color: MUTED } }
+    },
+    shapes, annotations,
+    hoverlabel: { bgcolor: INK, font: { family: 'IBM Plex Sans', color: 'white' } },
+    showlegend: false
+  };
+
+  Plotly.newPlot('mr-chart', traces, layout, { displayModeBar: false, responsive: true });
+}
+
+/* =========================================================================
+   RENDER UI ELEMENTS
+   ========================================================================= */
+function renderKPIs(values, stats, signals) {
+  document.getElementById('kpi-n').textContent = fmtInt(values.length);
+  document.getElementById('kpi-mean').textContent = fmt2(stats.mean);
+  document.getElementById('kpi-mrbar').textContent = fmt2(stats.mrBar);
+  document.getElementById('kpi-sigma').textContent = fmt2(stats.sigma);
+
+  const sigCount = signals.filter(s => s.flags.length > 0).length;
+  document.getElementById('kpi-signals').textContent = fmtInt(sigCount);
+
+  const card = document.getElementById('kpi-signal-card');
+  card.classList.toggle('zero', sigCount === 0);
+  document.getElementById('kpi-signals-sub').textContent =
+    sigCount === 0 ? 'brak sygnałów' : (sigCount === 1 ? 'punkt wymagający uwagi' : 'punktów wymagających uwagi');
+}
+
+function renderStateBanner(values, stats, signals) {
+  const sigCount = signals.filter(s => s.flags.length > 0).length;
+  const banner = document.getElementById('state-banner');
+  const pill = document.getElementById('state-pill');
+  const verdict = document.getElementById('state-verdict');
+  const detail = document.getElementById('state-detail');
+
+  if (sigCount === 0) {
+    banner.classList.remove('out-of-control');
+    banner.classList.add('in-control');
+    pill.textContent = 'In control';
+    verdict.textContent = 'Proces przewidywalny — żaden punkt nie narusza reguł detekcji.';
+    detail.textContent = `0 sygnałów · zakres typowy ${fmt1(stats.lower1s)} – ${fmt1(stats.upper1s)}`;
+  } else {
+    banner.classList.remove('in-control');
+    banner.classList.add('out-of-control');
+    pill.textContent = `${sigCount} sygnał${sigCount === 1 ? '' : (sigCount < 5 ? 'y' : 'ów')}`;
+    verdict.textContent = 'Proces wykazuje sygnały — istnieje przyczyna specjalna, którą warto zbadać.';
+    detail.textContent = `${sigCount} z ${values.length} punktów łamie reguły`;
+  }
+}
+
+function renderSignalsList(signals, labels, values) {
+  const list = document.getElementById('signal-list');
+  const sigs = signals
+    .map((s, i) => ({ ...s, i, value: values[i], label: labels[i] }))
+    .filter(s => s.flags.length > 0);
+
+  const countEl = document.getElementById('signals-count');
+  countEl.textContent = sigs.length;
+  countEl.classList.toggle('has-signals', sigs.length > 0);
+
+  if (sigs.length === 0) {
+    list.innerHTML = `
+      <li class="no-signals">
+        <div class="ok-icon">✓</div>
+        <div>Brak sygnałów — proces przewidywalny</div>
+      </li>`;
+    return;
+  }
+
+  list.innerHTML = sigs.map(s => `
+    <li class="signal-item">
+      <div class="signal-head">${s.label} · ${fmt1(s.value)}</div>
+      <div class="signal-rules">
+        ${s.flags.map(f => `<span class="rule-tag">[${f.rule}]</span> ${f.desc}`).join(' &nbsp;·&nbsp; ')}
+      </div>
+    </li>
+  `).join('');
+}
+
+function renderDataTable(rows, signals, metric, labelCol) {
+  const cols = Object.keys(rows[0]);
+  const head = document.querySelector('#data-table thead tr');
+  const body = document.querySelector('#data-table tbody');
+
+  head.innerHTML = '<th>#</th>' + cols.map(c => `<th>${c}</th>`).join('') + '<th>Sygnał</th>';
+
+  body.innerHTML = rows.map((r, i) => {
+    const isSignal = signals[i] && signals[i].flags.length > 0;
+    const flags = isSignal ? signals[i].flags.map(f => f.rule).join(', ') : '';
+    return `
+      <tr class="${isSignal ? 'signal-row' : ''}">
+        <td>${i + 1}</td>
+        ${cols.map(c => {
+          const v = r[c];
+          const isMetric = c === metric;
+          return `<td class="${isMetric ? 'val' : ''}">${v === null || v === undefined ? '—' : v}</td>`;
+        }).join('')}
+        <td>${flags}</td>
+      </tr>
+    `;
+  }).join('');
+}
+
+/* =========================================================================
+   POPULATE SELECTORS
+   ========================================================================= */
+function populateSheetSelect() {
+  const sel = document.getElementById('sheet-select');
+  const sheetNames = Object.keys(state.sheets);
+  sel.innerHTML = sheetNames.map(s => `<option value="${s}"${s === state.currentSheet ? ' selected' : ''}>${s}</option>`).join('');
+}
+
+function populateMetricSelect() {
+  const sel = document.getElementById('metric-select');
+  const rows = state.sheets[state.currentSheet];
+  if (!rows || rows.length === 0) {
+    sel.innerHTML = '<option>—</option>';
+    return;
+  }
+  const { numeric } = analyzeColumns(rows);
+  if (numeric.length === 0) {
+    sel.innerHTML = '<option>brak kolumn numerycznych</option>';
+    return;
+  }
+  // If current metric not in this sheet, pick a sensible default
+  if (!numeric.includes(state.currentMetric)) {
+    // Prefer "Cycle Time" or "LT" or first numeric that isn't an ID
+    const preferred = numeric.find(c => /cycle|lead|cykl|czas/i.test(c)) ||
+                      numeric.find(c => !/^id$/i.test(c)) ||
+                      numeric[0];
+    state.currentMetric = preferred;
+  }
+  sel.innerHTML = numeric.map(m =>
+    `<option value="${m}"${m === state.currentMetric ? ' selected' : ''}>${m}</option>`
+  ).join('');
+}
+
+/* =========================================================================
+   MAIN UPDATE — recompute and re-render everything
+   ========================================================================= */
+function update() {
+  const rows = state.sheets[state.currentSheet];
+  if (!rows || rows.length === 0) return;
+  state.rows = rows;
+
+  // Pick label column
+  if (!state.labelColumn || !(state.labelColumn in rows[0]) || state.labelColumn === state.currentMetric) {
+    state.labelColumn = pickLabelColumn(rows, state.currentMetric);
+  }
+
+  const values = getNumericValues(rows, state.currentMetric);
+  if (values.length < 2) return;
+
+  const labels = rows.map((r, i) => {
+    const v = r[state.labelColumn];
+    return v === null || v === undefined ? String(i + 1) : String(v);
+  });
+
+  const stats = computeXmR(values, { floorAtZero: state.options.floorAtZero });
+  const signals = detectSignals(values, stats);
+
+  // UI tags / units
+  document.getElementById('x-chart-tag').textContent = state.currentMetric + (state.currentMetric.toLowerCase().includes('time') ? ' · dni' : '');
+  const unit = state.currentMetric.toLowerCase().includes('time') ? 'd' : '';
+  document.getElementById('kpi-unit-1').textContent = unit;
+  document.getElementById('kpi-unit-2').textContent = unit;
+  document.getElementById('kpi-unit-3').textContent = unit;
+
+  // Render
+  renderKPIs(values, stats, signals);
+  renderStateBanner(values, stats, signals);
+  renderXChart(values, labels, stats, signals);
+
+  // mR chart
+  const mrCard = document.getElementById('mr-chart-card');
+  mrCard.style.display = state.options.showMR ? '' : 'none';
+  if (state.options.showMR) {
+    renderMRChart(stats.mr, labels, stats);
+  }
+
+  renderSignalsList(signals, labels, values);
+  renderDataTable(rows, signals, state.currentMetric, state.labelColumn);
+
+  // Source info
+  document.getElementById('source-name').textContent = state.fileName;
+  document.getElementById('source-sub').textContent = `${state.currentSheet} · ${values.length} obserwacji · metryka: ${state.currentMetric}`;
+
+  // Updated timestamp
+  const now = new Date();
+  document.getElementById('meta-updated').innerHTML =
+    `<span class="label">Updated</span> · ${now.toLocaleDateString('pl-PL')} ${now.toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' })}`;
+}
+
+/* =========================================================================
+   FILE UPLOAD
+   ========================================================================= */
+function readWorkbook(file) {
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    try {
+      const data = new Uint8Array(e.target.result);
+      const wb = XLSX.read(data, { type: 'array', cellDates: true });
+      state.workbook = wb;
+      state.sheets = {};
+      wb.SheetNames.forEach(name => {
+        const sheet = wb.Sheets[name];
+        // Use sheet_to_json with raw:false to convert dates to strings
+        const rows = XLSX.utils.sheet_to_json(sheet, { defval: null, raw: false });
+        if (rows.length > 0) state.sheets[name] = rows;
+      });
+      const sheetNames = Object.keys(state.sheets);
+      if (sheetNames.length === 0) {
+        alert('Plik nie zawiera żadnych wierszy danych.');
+        return;
+      }
+      state.currentSheet = sheetNames[0];
+      state.fileName = file.name;
+      state.labelColumn = null; // reset
+      populateSheetSelect();
+      populateMetricSelect();
+      update();
+    } catch (err) {
+      console.error(err);
+      alert('Nie udało się wczytać pliku: ' + err.message);
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function handleFileSelect(file) {
+  if (!file) return;
+  const name = file.name.toLowerCase();
+  if (name.endsWith('.csv')) {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const wb = XLSX.read(e.target.result, { type: 'string' });
+      state.workbook = wb;
+      state.sheets = {};
+      wb.SheetNames.forEach(n => {
+        state.sheets[n] = XLSX.utils.sheet_to_json(wb.Sheets[n], { defval: null, raw: false });
+      });
+      const sheetNames = Object.keys(state.sheets);
+      state.currentSheet = sheetNames[0];
+      state.fileName = file.name;
+      state.labelColumn = null;
+      populateSheetSelect();
+      populateMetricSelect();
+      update();
+    };
+    reader.readAsText(file);
+  } else {
+    readWorkbook(file);
+  }
+}
+
+/* =========================================================================
+   WIRING — event listeners
+   ========================================================================= */
+document.getElementById('upload-trigger').addEventListener('click', () => {
+  document.getElementById('file-input').click();
+});
+document.getElementById('file-input').addEventListener('change', (e) => {
+  if (e.target.files[0]) handleFileSelect(e.target.files[0]);
+});
+
+// Drag & drop on the whole window
+let dragCounter = 0;
+window.addEventListener('dragenter', (e) => {
+  if (e.dataTransfer && e.dataTransfer.types.includes('Files')) {
+    dragCounter++;
+    document.getElementById('drag-overlay').classList.add('show');
+  }
+});
+window.addEventListener('dragleave', () => {
+  dragCounter--;
+  if (dragCounter <= 0) {
+    dragCounter = 0;
+    document.getElementById('drag-overlay').classList.remove('show');
+  }
+});
+window.addEventListener('dragover', (e) => e.preventDefault());
+window.addEventListener('drop', (e) => {
+  e.preventDefault();
+  dragCounter = 0;
+  document.getElementById('drag-overlay').classList.remove('show');
+  if (e.dataTransfer.files.length > 0) handleFileSelect(e.dataTransfer.files[0]);
+});
+
+// Sheet & metric selectors
+document.getElementById('sheet-select').addEventListener('change', (e) => {
+  state.currentSheet = e.target.value;
+  populateMetricSelect();
+  update();
+});
+document.getElementById('metric-select').addEventListener('change', (e) => {
+  state.currentMetric = e.target.value;
+  update();
+});
+
+// Toggles
+['t-typical', 't-2sigma', 't-npl', 't-signals', 't-floor', 't-mr'].forEach(id => {
+  document.getElementById(id).addEventListener('change', (e) => {
+    const key = {
+      't-typical': 'showTypical',
+      't-2sigma': 'show2Sigma',
+      't-npl': 'showNPL',
+      't-signals': 'showSignals',
+      't-floor': 'floorAtZero',
+      't-mr': 'showMR'
+    }[id];
+    state.options[key] = e.target.checked;
+    update();
+  });
+});
+
+// Export PNG
+document.getElementById('export-btn').addEventListener('click', () => {
+  Plotly.toImage(document.getElementById('x-chart'), {
+    format: 'png',
+    width: 1400,
+    height: 700,
+    scale: 2
+  }).then(dataUrl => {
+    const a = document.createElement('a');
+    a.href = dataUrl;
+    a.download = `xmr-chart-${state.currentMetric.replace(/\s+/g, '-')}-${new Date().toISOString().slice(0, 10)}.png`;
+    a.click();
+  });
+});
+
+// Print
+document.getElementById('print-btn').addEventListener('click', () => window.print());
+
+// Data table toggle
+document.getElementById('table-toggle').addEventListener('click', () => {
+  document.getElementById('table-card').classList.toggle('collapsed');
+});
+
+/* =========================================================================
+   INITIAL RENDER
+   ========================================================================= */
+populateSheetSelect();
+populateMetricSelect();
+update();
+
+</script>
+</body>
+</html>
