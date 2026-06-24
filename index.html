@@ -1,1 +1,784 @@
-test test
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Lead Times — Dashboard 2024/25</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/plotly.js/2.35.2/plotly.min.js"></script>
+<script>
+  // Fallback CDN if cdnjs is blocked
+  if (typeof Plotly === 'undefined') {
+    document.write('<script src="https://cdn.jsdelivr.net/npm/plotly.js-dist-min@2.35.2/plotly.min.js"><\/script>');
+  }
+</script>
+<style>
+  :root{
+    --bg:        #fafaf9;
+    --surface:   #ffffff;
+    --border:    #e7e5e4;
+    --border-strong: #d6d3d1;
+    --text:      #111827;
+    --muted:     #6b7280;
+    --soft:      #9ca3af;
+    --accent:    #0f172a;
+
+    /* S / M / L — chłodny → ciepły, dobre rozróżnienie i sensowne dla daltonistów */
+    --c-s:       #2563eb;  /* blue-600 */
+    --c-m:       #7c3aed;  /* violet-600 */
+    --c-l:       #db2777;  /* pink-600 */
+    --c-all:     #1f2937;  /* gray-800 */
+
+    --c-s-bg:    rgba(37,99,235,0.10);
+    --c-m-bg:    rgba(124,58,237,0.10);
+    --c-l-bg:    rgba(219,39,119,0.10);
+  }
+
+  *{box-sizing:border-box}
+  html,body{margin:0;background:var(--bg);color:var(--text);
+    font-family:'Inter',system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+    font-feature-settings:"cv11","ss01","ss02";
+    -webkit-font-smoothing:antialiased;
+  }
+  .num{font-family:'JetBrains Mono',ui-monospace,monospace;font-variant-numeric:tabular-nums}
+
+  .wrap{max-width:1280px;margin:0 auto;padding:28px 24px 48px}
+
+  /* Header */
+  header{display:flex;align-items:end;justify-content:space-between;gap:24px;
+         padding-bottom:18px;border-bottom:1px solid var(--border)}
+  h1{font-size:26px;font-weight:700;letter-spacing:-0.02em;margin:0 0 4px}
+  .sub{color:var(--muted);font-size:13px}
+  .badge{display:inline-block;font-size:11px;letter-spacing:0.08em;
+         text-transform:uppercase;color:var(--muted);
+         border:1px solid var(--border-strong);border-radius:999px;
+         padding:3px 9px;margin-right:6px;background:var(--surface)}
+
+  /* KPI strip */
+  .kpis{display:grid;grid-template-columns:repeat(5,1fr);gap:1px;
+        background:var(--border);border:1px solid var(--border);
+        border-radius:10px;overflow:hidden;margin:18px 0 22px}
+  .kpi{background:var(--surface);padding:14px 16px}
+  .kpi .lbl{font-size:11px;letter-spacing:0.08em;text-transform:uppercase;color:var(--muted)}
+  .kpi .val{font-size:24px;font-weight:600;margin-top:4px;letter-spacing:-0.01em}
+  .kpi .unit{font-size:12px;color:var(--soft);margin-left:4px;font-weight:500}
+
+  /* Controls */
+  .controls{display:flex;flex-wrap:wrap;gap:18px;align-items:center;
+            background:var(--surface);border:1px solid var(--border);
+            border-radius:10px;padding:12px 14px;margin-bottom:16px}
+  .group{display:flex;align-items:center;gap:8px}
+  .group > span.gl{font-size:12px;color:var(--muted);
+                   text-transform:uppercase;letter-spacing:0.08em;margin-right:4px}
+  .btn{cursor:pointer;user-select:none;font:inherit;font-size:13px;font-weight:500;
+       padding:6px 12px;border:1px solid var(--border-strong);
+       background:var(--surface);border-radius:7px;color:var(--text);
+       transition:all .12s ease}
+  .btn:hover{border-color:#a8a29e;background:#fafaf9}
+  .btn.on{background:var(--accent);color:#fff;border-color:var(--accent)}
+  .btn.sz-s.on{background:var(--c-s);border-color:var(--c-s)}
+  .btn.sz-m.on{background:var(--c-m);border-color:var(--c-m)}
+  .btn.sz-l.on{background:var(--c-l);border-color:var(--c-l)}
+  .sep{width:1px;height:24px;background:var(--border)}
+  .spacer{flex:1}
+  .legend-line{display:inline-block;width:22px;height:0;vertical-align:middle;
+               border-top-width:2px;border-top-style:dashed;margin-right:4px}
+
+  /* Chart cards */
+  .card{background:var(--surface);border:1px solid var(--border);
+        border-radius:10px;padding:14px 14px 10px}
+  .card h2{font-size:13px;font-weight:600;margin:0 0 8px;
+           text-transform:uppercase;letter-spacing:0.08em;color:var(--muted)}
+  #scatter{height:480px;width:100%}
+  .row2{display:grid;grid-template-columns:1.2fr 1fr;gap:16px;margin-top:16px}
+  #hist{height:300px}
+  #throughput{height:300px}
+
+  /* Stats table */
+  .tablewrap{margin-top:16px}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th,td{text-align:right;padding:9px 12px;border-bottom:1px solid var(--border)}
+  th:first-child,td:first-child{text-align:left}
+  thead th{font-size:11px;letter-spacing:0.06em;text-transform:uppercase;
+           color:var(--muted);font-weight:600;background:#fafaf9}
+  tbody tr:last-child td{border-bottom:none}
+  .swatch{display:inline-block;width:10px;height:10px;border-radius:2px;
+          vertical-align:middle;margin-right:7px}
+  .row-all td{font-weight:600;background:#fafaf9}
+
+  footer{margin-top:22px;display:flex;gap:10px;align-items:center;color:var(--muted);font-size:12px}
+  footer .btn{font-size:12px;padding:5px 10px}
+
+  @media (max-width: 880px){
+    .kpis{grid-template-columns:repeat(2,1fr)}
+    .row2{grid-template-columns:1fr}
+    header{flex-direction:column;align-items:flex-start}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div>
+      <h1>Lead Times — Dashboard 2024/25</h1>
+      <div class="sub">
+        <span class="badge">36 zadań</span>
+        <span class="badge">lipiec 2024 – grudzień 2025</span>
+        <span class="badge">źródło: Lead_Times_-_2024-25.xlsx</span>
+      </div>
+    </div>
+    <div class="sub" id="filter-summary">Pokazane: wszystkie rozmiary</div>
+  </header>
+
+  <!-- KPI strip — recalculated based on filter -->
+  <div class="kpis" id="kpis">
+    <div class="kpi"><div class="lbl">Liczba zadań</div><div class="val num" id="k-n">—</div></div>
+    <div class="kpi"><div class="lbl">P50 (mediana)</div><div class="val num" id="k-p50">— <span class="unit">dni</span></div></div>
+    <div class="kpi"><div class="lbl">P85</div><div class="val num" id="k-p85">— <span class="unit">dni</span></div></div>
+    <div class="kpi"><div class="lbl">P95</div><div class="val num" id="k-p95">— <span class="unit">dni</span></div></div>
+    <div class="kpi"><div class="lbl">Maks.</div><div class="val num" id="k-max">— <span class="unit">dni</span></div></div>
+  </div>
+
+  <!-- Controls -->
+  <div class="controls">
+    <div class="group">
+      <span class="gl">Rozmiar</span>
+      <button class="btn sz-s on" data-sz="S">S</button>
+      <button class="btn sz-m on" data-sz="M">M</button>
+      <button class="btn sz-l on" data-sz="L">L</button>
+    </div>
+
+    <div class="sep"></div>
+
+    <div class="group">
+      <span class="gl">Percentyle</span>
+      <button class="btn on" id="t-per-size">Per rozmiar</button>
+      <button class="btn on" id="t-overall">Wspólne</button>
+    </div>
+
+    <div class="sep"></div>
+
+    <div class="group">
+      <span class="gl">Pokaż</span>
+      <button class="btn on" id="t-p50">P50</button>
+      <button class="btn on" id="t-p85">P85</button>
+      <button class="btn on" id="t-p95">P95</button>
+    </div>
+
+    <div class="sep"></div>
+
+    <div class="group">
+      <span class="gl">Oś Y</span>
+      <button class="btn on" id="t-yaxis-linear">liniowa</button>
+      <button class="btn" id="t-yaxis-log">log</button>
+    </div>
+
+    <div class="spacer"></div>
+
+    <button class="btn" id="btn-reset" title="Przywróć domyślne ustawienia">Reset</button>
+  </div>
+
+  <!-- Main scatter -->
+  <div class="card">
+    <h2>Czas realizacji w czasie</h2>
+    <div id="scatter"></div>
+  </div>
+
+  <!-- Secondary charts -->
+  <div class="row2">
+    <div class="card">
+      <h2>Rozkład czasów realizacji</h2>
+      <div id="hist"></div>
+    </div>
+    <div class="card">
+      <h2>Przepustowość (zadania / miesiąc)</h2>
+      <div id="throughput"></div>
+    </div>
+  </div>
+
+  <!-- Stats table -->
+  <div class="card tablewrap">
+    <h2>Statystyki</h2>
+    <table id="stats">
+      <thead>
+        <tr>
+          <th>Kategoria</th>
+          <th>N</th>
+          <th>Min</th>
+          <th>Średnia</th>
+          <th>P50</th>
+          <th>P85</th>
+          <th>P95</th>
+          <th>Maks.</th>
+          <th>Odch. std.</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </div>
+
+  <footer>
+    <button class="btn" id="btn-csv">Eksport CSV (widoczne)</button>
+    <span>Percentyle obliczane metodą interpolacji liniowej (zgodnie z numpy.percentile).</span>
+  </footer>
+</div>
+
+<script id="data" type="application/json">
+[
+  {
+    "date": "2024-07-15",
+    "size": "S",
+    "lead_time": 49.0
+  },
+  {
+    "date": "2024-08-22",
+    "size": "S",
+    "lead_time": 48.0
+  },
+  {
+    "date": "2024-09-10",
+    "size": "S",
+    "lead_time": 87.0
+  },
+  {
+    "date": "2024-09-25",
+    "size": "M",
+    "lead_time": 57.0
+  },
+  {
+    "date": "2024-10-05",
+    "size": "M",
+    "lead_time": 148.0
+  },
+  {
+    "date": "2024-10-14",
+    "size": "S",
+    "lead_time": 53.0
+  },
+  {
+    "date": "2024-10-28",
+    "size": "S",
+    "lead_time": 45.0
+  },
+  {
+    "date": "2024-11-18",
+    "size": "M",
+    "lead_time": 145.0
+  },
+  {
+    "date": "2024-12-04",
+    "size": "L",
+    "lead_time": 105.0
+  },
+  {
+    "date": "2025-01-08",
+    "size": "S",
+    "lead_time": 5.0
+  },
+  {
+    "date": "2025-01-20",
+    "size": "L",
+    "lead_time": 163.0
+  },
+  {
+    "date": "2025-02-14",
+    "size": "S",
+    "lead_time": 43.0
+  },
+  {
+    "date": "2025-02-26",
+    "size": "M",
+    "lead_time": 415.0
+  },
+  {
+    "date": "2025-03-15",
+    "size": "L",
+    "lead_time": 123.0
+  },
+  {
+    "date": "2025-04-10",
+    "size": "M",
+    "lead_time": 103.0
+  },
+  {
+    "date": "2025-05-05",
+    "size": "L",
+    "lead_time": 104.0
+  },
+  {
+    "date": "2025-06-12",
+    "size": "L",
+    "lead_time": 302.0
+  },
+  {
+    "date": "2025-06-25",
+    "size": "L",
+    "lead_time": 158.0
+  },
+  {
+    "date": "2025-07-02",
+    "size": "L",
+    "lead_time": 98.0
+  },
+  {
+    "date": "2025-07-11",
+    "size": "S",
+    "lead_time": 52.0
+  },
+  {
+    "date": "2025-07-18",
+    "size": "M",
+    "lead_time": 95.0
+  },
+  {
+    "date": "2025-07-29",
+    "size": "S",
+    "lead_time": 70.0
+  },
+  {
+    "date": "2025-08-03",
+    "size": "M",
+    "lead_time": 95.0
+  },
+  {
+    "date": "2025-08-14",
+    "size": "M",
+    "lead_time": 101.0
+  },
+  {
+    "date": "2025-08-21",
+    "size": "M",
+    "lead_time": 57.0
+  },
+  {
+    "date": "2025-08-29",
+    "size": "M",
+    "lead_time": 57.0
+  },
+  {
+    "date": "2025-09-08",
+    "size": "S",
+    "lead_time": 53.0
+  },
+  {
+    "date": "2025-09-22",
+    "size": "L",
+    "lead_time": 137.0
+  },
+  {
+    "date": "2025-10-04",
+    "size": "S",
+    "lead_time": 73.0
+  },
+  {
+    "date": "2025-10-12",
+    "size": "M",
+    "lead_time": 60.0
+  },
+  {
+    "date": "2025-10-19",
+    "size": "S",
+    "lead_time": 126.0
+  },
+  {
+    "date": "2025-10-27",
+    "size": "M",
+    "lead_time": 57.0
+  },
+  {
+    "date": "2025-11-05",
+    "size": "L",
+    "lead_time": 124.0
+  },
+  {
+    "date": "2025-11-15",
+    "size": "M",
+    "lead_time": 75.0
+  },
+  {
+    "date": "2025-11-25",
+    "size": "M",
+    "lead_time": 89.0
+  },
+  {
+    "date": "2025-12-10",
+    "size": "S",
+    "lead_time": 44.0
+  }
+]
+</script>
+
+<script>
+/* ----------- Data ----------- */
+const RAW = JSON.parse(document.getElementById('data').textContent);
+RAW.forEach(d => { d.lead_time = +d.lead_time; });
+
+const SIZES = ['S','M','L'];
+const COLOR = { S:'#2563eb', M:'#7c3aed', L:'#db2777', ALL:'#1f2937' };
+const DASH  = { p50:'dot', p85:'dash', p95:'longdashdot' };
+const PWIDTH = { p50:1.2, p85:1.6, p95:2.0 };
+
+const STATE = {
+  sizes: new Set(['S','M','L']),
+  perSize: true,
+  overall: true,
+  pct: { p50:true, p85:true, p95:true },
+  yLog: false,
+};
+
+/* ----------- Stats helpers ----------- */
+function percentile(arr, p){
+  if (!arr.length) return null;
+  const a = arr.slice().sort((x,y)=>x-y);
+  const k = (a.length-1) * p/100;
+  const f = Math.floor(k), c = Math.min(f+1, a.length-1);
+  if (f===c) return a[f];
+  return a[f] + (a[c]-a[f])*(k-f);
+}
+const mean = a => a.reduce((s,v)=>s+v,0)/a.length;
+const std  = a => { if (a.length<2) return 0; const m=mean(a);
+  return Math.sqrt(a.reduce((s,v)=>s+(v-m)*(v-m),0)/(a.length-1)); };
+const fmt  = (v, d=1) => v==null ? '—' : (Math.round(v*10**d)/10**d).toLocaleString('pl-PL');
+
+/* ----------- Build derived series ----------- */
+function visibleData(){
+  return RAW.filter(d => STATE.sizes.has(d.size));
+}
+function groupBySize(data){
+  const g = {S:[], M:[], L:[]};
+  data.forEach(d => g[d.size].push(d.lead_time));
+  return g;
+}
+
+/* ----------- Plot: scatter ----------- */
+function buildScatter(){
+  const data = visibleData();
+  const dateMin = RAW.reduce((m,d)=>d.date<m?d.date:m, RAW[0].date);
+  const dateMax = RAW.reduce((m,d)=>d.date>m?d.date:m, RAW[0].date);
+  // padding on x-axis
+  const pad = (iso, days) => {
+    const dt = new Date(iso); dt.setDate(dt.getDate()+days);
+    return dt.toISOString().slice(0,10);
+  };
+  const x0 = pad(dateMin, -10);
+  const x1 = pad(dateMax, +10);
+
+  const traces = [];
+
+  // 1) scatter per size
+  SIZES.forEach(sz => {
+    const rows = data.filter(d=>d.size===sz);
+    traces.push({
+      type:'scatter', mode:'markers',
+      name: 'Rozmiar '+sz,
+      x: rows.map(d=>d.date),
+      y: rows.map(d=>d.lead_time),
+      marker:{ size:11, color:COLOR[sz], opacity:0.85,
+               line:{width:1.5,color:'#fff'} },
+      hovertemplate:
+        '<b>Rozmiar '+sz+'</b><br>'+
+        'Data: %{x|%d %b %Y}<br>'+
+        'Czas realizacji: <b>%{y}</b> dni<extra></extra>',
+      legendgroup: 'sz-'+sz,
+    });
+  });
+
+  // 2) percentile lines — per size
+  if (STATE.perSize){
+    const grouped = groupBySize(data);
+    SIZES.forEach(sz => {
+      const arr = grouped[sz];
+      if (!arr.length) return;
+      ['p50','p85','p95'].forEach(p => {
+        if (!STATE.pct[p]) return;
+        const v = percentile(arr, +p.slice(1));
+        traces.push({
+          type:'scatter', mode:'lines',
+          name: sz+' '+p.toUpperCase()+' = '+fmt(v,0),
+          x:[x0, x1], y:[v,v],
+          line:{ color:COLOR[sz], width:PWIDTH[p], dash:DASH[p] },
+          opacity:0.85,
+          hovertemplate:'Rozmiar '+sz+' — '+p.toUpperCase()+': <b>'+fmt(v,1)+'</b> dni<extra></extra>',
+          legendgroup:'sz-'+sz+'-pct',
+        });
+      });
+    });
+  }
+
+  // 3) percentile lines — overall (visible data)
+  if (STATE.overall){
+    const all = data.map(d=>d.lead_time);
+    ['p50','p85','p95'].forEach(p => {
+      if (!STATE.pct[p]) return;
+      const v = percentile(all, +p.slice(1));
+      if (v==null) return;
+      traces.push({
+        type:'scatter', mode:'lines',
+        name: 'Wspólny '+p.toUpperCase()+' = '+fmt(v,0),
+        x:[x0, x1], y:[v,v],
+        line:{ color:COLOR.ALL, width:PWIDTH[p]+0.4, dash:DASH[p] },
+        opacity:0.95,
+        hovertemplate:'Wspólny — '+p.toUpperCase()+': <b>'+fmt(v,1)+'</b> dni<extra></extra>',
+        legendgroup:'all-pct',
+      });
+    });
+  }
+
+  const layout = {
+    margin:{l:55,r:20,t:8,b:50},
+    paper_bgcolor:'#fff', plot_bgcolor:'#fff',
+    font:{family:'Inter, system-ui, sans-serif', size:12, color:'#374151'},
+    xaxis:{
+      type:'date', range:[x0,x1],
+      gridcolor:'#f1f5f9', linecolor:'#e7e5e4', zeroline:false,
+      title:{text:'Data ukończenia', font:{size:12,color:'#6b7280'}},
+    },
+    yaxis:{
+      type: STATE.yLog ? 'log' : 'linear',
+      gridcolor:'#f1f5f9', linecolor:'#e7e5e4', zeroline:false,
+      title:{text:'Czas realizacji (dni)', font:{size:12,color:'#6b7280'}},
+      rangemode:'tozero',
+    },
+    legend:{
+      orientation:'h', y:-0.18, x:0, xanchor:'left',
+      font:{size:11}, bgcolor:'rgba(0,0,0,0)',
+      itemwidth:30,
+    },
+    hoverlabel:{ bgcolor:'#fff', bordercolor:'#d6d3d1',
+                 font:{family:'Inter',size:12,color:'#111827'} },
+    showlegend:true,
+  };
+
+  Plotly.react('scatter', traces, layout, {displaylogo:false, responsive:true,
+    modeBarButtonsToRemove:['lasso2d','select2d','autoScale2d']});
+}
+
+/* ----------- Plot: histogram ----------- */
+function buildHist(){
+  const data = visibleData();
+  const traces = SIZES.filter(sz => STATE.sizes.has(sz)).map(sz => {
+    const rows = data.filter(d=>d.size===sz);
+    return {
+      type:'histogram',
+      name:'Rozmiar '+sz,
+      x: rows.map(d=>d.lead_time),
+      marker:{ color:COLOR[sz], line:{color:'#fff',width:1} },
+      opacity:0.85,
+      xbins:{ start:0, end:450, size:25 },
+      hovertemplate:'Rozmiar '+sz+': <b>%{y}</b> zadań<br>Zakres: %{x} dni<extra></extra>',
+    };
+  });
+  const layout = {
+    margin:{l:45,r:10,t:6,b:40}, barmode:'stack',
+    paper_bgcolor:'#fff', plot_bgcolor:'#fff',
+    font:{family:'Inter',size:11,color:'#374151'},
+    xaxis:{title:{text:'Czas realizacji (dni)',font:{size:11,color:'#6b7280'}},
+      gridcolor:'#f1f5f9', linecolor:'#e7e5e4', zeroline:false},
+    yaxis:{title:{text:'Liczba zadań',font:{size:11,color:'#6b7280'}},
+      gridcolor:'#f1f5f9', linecolor:'#e7e5e4', zeroline:false},
+    legend:{orientation:'h', y:-0.22, x:0, font:{size:11}},
+    bargap:0.04,
+  };
+  Plotly.react('hist', traces, layout, {displaylogo:false, responsive:true,
+    modeBarButtonsToRemove:['lasso2d','select2d','autoScale2d']});
+}
+
+/* ----------- Plot: throughput by month ----------- */
+function buildThroughput(){
+  const data = visibleData();
+  // bucket by YYYY-MM
+  const buckets = {};
+  data.forEach(d=>{
+    const ym = d.date.slice(0,7);
+    buckets[ym] = buckets[ym] || {S:0,M:0,L:0};
+    buckets[ym][d.size] += 1;
+  });
+  // Generate full month range from min to max month in RAW
+  const allYM = RAW.map(d=>d.date.slice(0,7)).sort();
+  function* range(a,b){
+    let [y,m] = a.split('-').map(Number);
+    const [yb,mb] = b.split('-').map(Number);
+    while (y<yb || (y===yb && m<=mb)){
+      yield y+'-'+String(m).padStart(2,'0');
+      m++; if (m>12){m=1;y++;}
+    }
+  }
+  const months = [...range(allYM[0], allYM[allYM.length-1])];
+  months.forEach(m=>{ buckets[m] = buckets[m]||{S:0,M:0,L:0}; });
+
+  const traces = SIZES.filter(sz=>STATE.sizes.has(sz)).map(sz => ({
+    type:'bar',
+    name:'Rozmiar '+sz,
+    x: months,
+    y: months.map(m=>buckets[m][sz]),
+    marker:{color:COLOR[sz]},
+    hovertemplate:'%{x|%b %Y}<br>Rozmiar '+sz+': <b>%{y}</b><extra></extra>',
+  }));
+
+  const layout = {
+    margin:{l:35,r:10,t:6,b:40}, barmode:'stack',
+    paper_bgcolor:'#fff', plot_bgcolor:'#fff',
+    font:{family:'Inter',size:11,color:'#374151'},
+    xaxis:{type:'category', tickangle:-40, tickfont:{size:10},
+      gridcolor:'#f1f5f9', linecolor:'#e7e5e4'},
+    yaxis:{title:{text:'Zadań / miesiąc',font:{size:11,color:'#6b7280'}},
+      gridcolor:'#f1f5f9', linecolor:'#e7e5e4', dtick:1, rangemode:'tozero'},
+    legend:{orientation:'h', y:-0.28, x:0, font:{size:11}},
+    bargap:0.25,
+  };
+  Plotly.react('throughput', traces, layout, {displaylogo:false, responsive:true,
+    modeBarButtonsToRemove:['lasso2d','select2d','autoScale2d']});
+}
+
+/* ----------- KPIs ----------- */
+function updateKPIs(){
+  const arr = visibleData().map(d=>d.lead_time);
+  document.getElementById('k-n').textContent = arr.length;
+  document.getElementById('k-p50').innerHTML = fmt(percentile(arr,50),0)+' <span class="unit">dni</span>';
+  document.getElementById('k-p85').innerHTML = fmt(percentile(arr,85),0)+' <span class="unit">dni</span>';
+  document.getElementById('k-p95').innerHTML = fmt(percentile(arr,95),0)+' <span class="unit">dni</span>';
+  document.getElementById('k-max').innerHTML = (arr.length?fmt(Math.max(...arr),0):'—')+' <span class="unit">dni</span>';
+
+  const sel = [...STATE.sizes].sort();
+  const txt = sel.length===3 ? 'Pokazane: wszystkie rozmiary'
+    : sel.length===0 ? 'Pokazane: brak — wybierz rozmiar'
+    : 'Pokazane: '+sel.join(', ');
+  document.getElementById('filter-summary').textContent = txt;
+}
+
+/* ----------- Stats table ----------- */
+function updateStats(){
+  const tbody = document.querySelector('#stats tbody');
+  tbody.innerHTML = '';
+  const data = visibleData();
+  const grouped = groupBySize(data);
+  const rows = [];
+  SIZES.forEach(sz => {
+    const a = grouped[sz];
+    if (!a.length) return;
+    rows.push({label:sz, color:COLOR[sz], arr:a, klass:''});
+  });
+  rows.push({label:'Łącznie (widoczne)', color:COLOR.ALL, arr:data.map(d=>d.lead_time), klass:'row-all'});
+  rows.forEach(r=>{
+    const tr = document.createElement('tr');
+    if (r.klass) tr.className = r.klass;
+    const sw = `<span class="swatch" style="background:${r.color}"></span>`;
+    const a = r.arr;
+    tr.innerHTML =
+      `<td>${sw}${r.label}</td>`+
+      `<td class="num">${a.length}</td>`+
+      `<td class="num">${fmt(Math.min(...a),0)}</td>`+
+      `<td class="num">${fmt(mean(a),1)}</td>`+
+      `<td class="num">${fmt(percentile(a,50),0)}</td>`+
+      `<td class="num">${fmt(percentile(a,85),0)}</td>`+
+      `<td class="num">${fmt(percentile(a,95),0)}</td>`+
+      `<td class="num">${fmt(Math.max(...a),0)}</td>`+
+      `<td class="num">${fmt(std(a),1)}</td>`;
+    tbody.appendChild(tr);
+  });
+  if (!rows.length){
+    tbody.innerHTML = '<tr><td colspan="9" style="color:var(--muted);text-align:center;padding:18px">Brak danych — wybierz co najmniej jeden rozmiar.</td></tr>';
+  }
+}
+
+/* ----------- Render all ----------- */
+function renderAll(){
+  buildScatter(); buildHist(); buildThroughput();
+  updateKPIs(); updateStats();
+}
+
+/* ----------- Controls wiring ----------- */
+document.querySelectorAll('.btn[data-sz]').forEach(b=>{
+  b.addEventListener('click', ()=>{
+    const sz = b.dataset.sz;
+    if (STATE.sizes.has(sz)) STATE.sizes.delete(sz); else STATE.sizes.add(sz);
+    b.classList.toggle('on');
+    renderAll();
+  });
+});
+
+function toggleBtn(id, key, holder){
+  const el = document.getElementById(id);
+  el.addEventListener('click', ()=>{
+    holder[key] = !holder[key];
+    el.classList.toggle('on', holder[key]);
+    renderAll();
+  });
+}
+toggleBtn('t-per-size', 'perSize', STATE);
+toggleBtn('t-overall',  'overall', STATE);
+['p50','p85','p95'].forEach(p=>{
+  document.getElementById('t-'+p).addEventListener('click', e=>{
+    STATE.pct[p] = !STATE.pct[p];
+    e.target.classList.toggle('on', STATE.pct[p]);
+    renderAll();
+  });
+});
+
+// Y-axis toggle (mutually exclusive)
+document.getElementById('t-yaxis-linear').addEventListener('click', ()=>{
+  STATE.yLog = false;
+  document.getElementById('t-yaxis-linear').classList.add('on');
+  document.getElementById('t-yaxis-log').classList.remove('on');
+  buildScatter();
+});
+document.getElementById('t-yaxis-log').addEventListener('click', ()=>{
+  STATE.yLog = true;
+  document.getElementById('t-yaxis-log').classList.add('on');
+  document.getElementById('t-yaxis-linear').classList.remove('on');
+  buildScatter();
+});
+
+// Reset
+document.getElementById('btn-reset').addEventListener('click', ()=>{
+  STATE.sizes = new Set(['S','M','L']);
+  STATE.perSize = true; STATE.overall = true;
+  STATE.pct = {p50:true, p85:true, p95:true};
+  STATE.yLog = false;
+  document.querySelectorAll('.btn[data-sz]').forEach(b=>b.classList.add('on'));
+  ['t-per-size','t-overall','t-p50','t-p85','t-p95','t-yaxis-linear'].forEach(id=>document.getElementById(id).classList.add('on'));
+  document.getElementById('t-yaxis-log').classList.remove('on');
+  renderAll();
+});
+
+// CSV export
+document.getElementById('btn-csv').addEventListener('click', ()=>{
+  const rows = visibleData();
+  const header = 'data_ukonczenia,deklarowany_rozmiar,czas_realizacji_dni\n';
+  const body = rows.map(r=>`${r.date},${r.size},${r.lead_time}`).join('\n');
+  const blob = new Blob([header+body], {type:'text/csv;charset=utf-8'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'lead_times_widoczne.csv';
+  a.click();
+  URL.revokeObjectURL(a.href);
+});
+
+/* ----------- First paint ----------- */
+function showLoadError(msg){
+  const banner = document.createElement('div');
+  banner.style.cssText = 'background:#fef2f2;border:1px solid #fecaca;color:#991b1b;'+
+    'padding:12px 14px;border-radius:8px;margin:0 0 16px;font-size:13px;line-height:1.5';
+  banner.innerHTML = '<b>Nie udało się załadować dashboardu.</b><br>'+msg+
+    '<br><br>Możliwe przyczyny: brak połączenia z internetem albo zablokowany skrypt zewnętrzny. '+
+    'Spróbuj otworzyć plik bezpośrednio w przeglądarce (Chrome / Firefox / Safari) — dane są osadzone w pliku, '+
+    'ale wymagana jest biblioteka Plotly z CDN.';
+  const wrap = document.querySelector('.wrap');
+  wrap.insertBefore(banner, wrap.firstChild.nextSibling);
+}
+
+if (typeof Plotly === 'undefined') {
+  showLoadError('Nie wczytano biblioteki Plotly (CDN).');
+} else {
+  try { renderAll(); }
+  catch (e) {
+    console.error(e);
+    showLoadError('Błąd JavaScript: '+ (e && e.message ? e.message : e));
+  }
+}
+</script>
+</body>
+</html>
