@@ -1,1 +1,1622 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Prognoza Monte Carlo · Dostarczenie 6 Epików</title>
+<meta name="description" content="Interaktywny dashboard prognozy Monte Carlo dla dostarczenia Epików w 2-tygodniowych sprintach." />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+  :root {
+    --bg: #F5F3EE;
+    --surface: #FFFFFF;
+    --ink: #1B1F23;
+    --ink-soft: #2D3339;
+    --muted: #6E7681;
+    --border: #E5E2DA;
+    --border-soft: #EFECE3;
+    --accent: #1F4E79;
+    --accent-deep: #163B5E;
+    --accent-soft: #E8EEF4;
+    --prob-low: #A8423F;
+    --prob-mid: #C97B3F;
+    --prob-high: #4A7C59;
+    --prob-low-soft: #EFD9D9;
+    --prob-mid-soft: #F5E5D5;
+    --prob-high-soft: #E0EBDD;
+    --grid: #EAE6DC;
+  }
 
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html { -webkit-font-smoothing: antialiased; }
+
+  body {
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    line-height: 1.5;
+    padding: 24px 20px 48px;
+    min-height: 100vh;
+  }
+
+  .container { max-width: 1400px; margin: 0 auto; }
+
+  /* ── Header ─────────────────────────────────────────── */
+  header.page-header {
+    margin-bottom: 28px;
+    padding-bottom: 24px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    gap: 24px;
+    flex-wrap: wrap;
+  }
+
+  .eyebrow {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    color: var(--muted);
+    text-transform: uppercase;
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .eyebrow::before {
+    content: '';
+    width: 18px;
+    height: 1px;
+    background: var(--muted);
+  }
+
+  h1 {
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: clamp(28px, 3.6vw, 40px);
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    line-height: 1.05;
+    margin-bottom: 8px;
+  }
+
+  .subtitle {
+    color: var(--muted);
+    font-size: 14px;
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  .header-status {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    color: var(--muted);
+    text-align: right;
+  }
+  .header-status strong { color: var(--ink); font-weight: 600; }
+
+  /* ── Summary cards ───────────────────────────────────── */
+  .summary {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 16px;
+    margin-bottom: 28px;
+  }
+
+  .stat-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 22px 22px 20px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .stat-card.featured {
+    background: linear-gradient(135deg, var(--accent) 0%, #2A5A85 100%);
+    color: white;
+    border: none;
+  }
+
+  .stat-card.featured::after {
+    content: '';
+    position: absolute;
+    right: -40px;
+    top: -40px;
+    width: 140px;
+    height: 140px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.06);
+  }
+
+  .stat-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10.5px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 10px;
+  }
+  .stat-card.featured .stat-label { color: rgba(255,255,255,0.75); }
+
+  .stat-value {
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 36px;
+    font-weight: 600;
+    letter-spacing: -0.025em;
+    line-height: 1;
+  }
+
+  .stat-subvalue {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    color: var(--muted);
+    margin-top: 8px;
+  }
+  .stat-card.featured .stat-subvalue { color: rgba(255,255,255,0.8); }
+
+  .stat-bar {
+    height: 4px;
+    background: var(--border-soft);
+    border-radius: 2px;
+    margin-top: 14px;
+    overflow: hidden;
+  }
+  .stat-bar-fill {
+    height: 100%;
+    border-radius: 2px;
+    transition: width 0.6s ease;
+  }
+  .stat-card.featured .stat-bar { background: rgba(255,255,255,0.15); }
+  .stat-card.featured .stat-bar-fill { background: rgba(255,255,255,0.9); }
+
+  /* ── Layout grid ─────────────────────────────────────── */
+  .grid-main {
+    display: grid;
+    grid-template-columns: 340px 1fr;
+    gap: 24px;
+    align-items: start;
+  }
+
+  @media (max-width: 980px) {
+    .grid-main { grid-template-columns: 1fr; }
+  }
+
+  .panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 20px;
+    margin-bottom: 16px;
+  }
+
+  .panel h2 {
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 15px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    margin-bottom: 14px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--border-soft);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .panel h2 .num {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: var(--muted);
+    font-weight: 400;
+  }
+
+  .panel h3 {
+    font-family: 'Inter', sans-serif;
+    font-size: 14px;
+    font-weight: 600;
+    margin-bottom: 8px;
+    color: var(--ink-soft);
+  }
+
+  /* ── Inputs ──────────────────────────────────────────── */
+  .input-group { margin-bottom: 14px; }
+  .input-group:last-child { margin-bottom: 0; }
+
+  .input-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+
+  label {
+    display: block;
+    font-size: 10.5px;
+    font-weight: 500;
+    color: var(--muted);
+    margin-bottom: 6px;
+    font-family: 'JetBrains Mono', monospace;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+
+  input[type="text"], input[type="number"], input[type="date"], select {
+    width: 100%;
+    padding: 8px 11px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--bg);
+    font-family: 'Inter', sans-serif;
+    font-size: 13.5px;
+    color: var(--ink);
+    transition: border-color 0.15s, background 0.15s;
+  }
+
+  input[type="number"] { font-family: 'JetBrains Mono', monospace; }
+
+  input:focus, select:focus {
+    outline: none;
+    border-color: var(--accent);
+    background: var(--surface);
+  }
+
+  input[type="range"] {
+    width: 100%;
+    accent-color: var(--accent);
+    margin-top: 4px;
+  }
+
+  .slider-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: var(--muted);
+    margin-bottom: 4px;
+  }
+  .slider-value {
+    color: var(--ink);
+    font-weight: 600;
+    font-size: 13px;
+  }
+
+  /* ── Tables ──────────────────────────────────────────── */
+  .epic-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+  }
+
+  .epic-table th {
+    text-align: left;
+    padding: 6px 6px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    font-weight: 500;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--muted);
+    border-bottom: 1px solid var(--border-soft);
+  }
+  .epic-table th.num-col { text-align: center; width: 60px; }
+  .epic-table th.action-col { width: 32px; }
+
+  .epic-table td { padding: 3px 4px; }
+  .epic-table td.action-cell { text-align: center; }
+
+  .epic-table input[type="text"] {
+    background: transparent;
+    border: 1px solid transparent;
+    padding: 6px 8px;
+  }
+  .epic-table input[type="text"]:hover, .epic-table input[type="text"]:focus {
+    background: var(--bg);
+    border-color: var(--border);
+  }
+  .epic-table input[type="number"] {
+    text-align: center;
+    padding: 6px 4px;
+    font-size: 13px;
+  }
+
+  /* ── Buttons ─────────────────────────────────────────── */
+  button {
+    cursor: pointer;
+    font-family: 'Inter', sans-serif;
+    border: none;
+    transition: all 0.15s;
+  }
+
+  .btn-primary {
+    background: var(--accent);
+    color: white;
+    padding: 13px 20px;
+    border-radius: 10px;
+    font-weight: 600;
+    font-size: 14px;
+    width: 100%;
+    letter-spacing: -0.01em;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+  }
+  .btn-primary:hover { background: var(--accent-deep); }
+  .btn-primary:active { transform: translateY(1px); }
+  .btn-primary:disabled { opacity: 0.5; cursor: wait; }
+
+  .btn-secondary {
+    background: var(--bg);
+    color: var(--ink-soft);
+    padding: 8px 14px;
+    border-radius: 8px;
+    font-size: 13px;
+    border: 1px solid var(--border);
+    font-weight: 500;
+  }
+  .btn-secondary:hover { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+
+  .btn-icon {
+    background: transparent;
+    color: var(--muted);
+    width: 26px;
+    height: 26px;
+    border-radius: 6px;
+    font-size: 16px;
+    line-height: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .btn-icon:hover { background: var(--prob-low-soft); color: var(--prob-low); }
+  .btn-icon.btn-add:hover { background: var(--prob-high-soft); color: var(--prob-high); }
+
+  .btn-row {
+    display: flex;
+    gap: 8px;
+    margin-top: 10px;
+  }
+  .btn-row .btn-secondary { flex: 1; }
+
+  /* ── Throughput tags ─────────────────────────────────── */
+  .tp-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 10px;
+    min-height: 30px;
+  }
+
+  .tp-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 10px;
+    background: var(--accent-soft);
+    color: var(--accent);
+    border-radius: 6px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+    font-weight: 500;
+  }
+
+  .tp-tag button {
+    background: transparent;
+    border: none;
+    color: var(--accent);
+    cursor: pointer;
+    font-size: 16px;
+    line-height: 1;
+    padding: 0;
+    opacity: 0.4;
+    margin-left: 2px;
+  }
+  .tp-tag button:hover { opacity: 1; }
+
+  .tp-add {
+    display: flex;
+    gap: 6px;
+  }
+  .tp-add input { flex: 1; }
+  .tp-add button {
+    background: var(--ink);
+    color: white;
+    padding: 0 14px;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 600;
+  }
+  .tp-add button:hover { background: var(--accent); }
+
+  /* ── Stats row ───────────────────────────────────────── */
+  .stat-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 6px 0;
+    font-size: 12.5px;
+    border-bottom: 1px dashed var(--border-soft);
+  }
+  .stat-row:last-child { border-bottom: none; }
+  .stat-row .label-text { color: var(--muted); }
+  .stat-row .value-text {
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 600;
+    color: var(--ink);
+  }
+
+  /* ── Charts ──────────────────────────────────────────── */
+  .chart-container {
+    position: relative;
+    height: 380px;
+    margin-top: 8px;
+  }
+  .chart-container.tall { height: 440px; }
+
+  .chart-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 8px;
+    gap: 16px;
+  }
+  .chart-header .desc {
+    font-size: 12.5px;
+    color: var(--muted);
+    line-height: 1.5;
+    max-width: 60%;
+  }
+
+  .chart-legend-inline {
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+  }
+  .legend-dot {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--muted);
+  }
+  .legend-dot::before {
+    content: '';
+    width: 10px;
+    height: 10px;
+    border-radius: 2px;
+  }
+  .legend-dot.curve::before { background: var(--accent); }
+  .legend-dot.target::before { background: var(--prob-low); }
+  .legend-dot.histogram::before { background: var(--accent); opacity: 0.55; }
+
+  /* ── Percentile pills ────────────────────────────────── */
+  .prob-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13.5px;
+  }
+  .prob-table th, .prob-table td {
+    text-align: left;
+    padding: 11px 14px;
+  }
+  .prob-table tr { border-bottom: 1px solid var(--border-soft); }
+  .prob-table tr:last-child { border-bottom: none; }
+  .prob-table th {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10.5px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--muted);
+    font-weight: 500;
+  }
+  .prob-table td.numeric {
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 500;
+  }
+
+  .pill {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 12px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+  }
+  .pill-high { background: var(--prob-high-soft); color: var(--prob-high); }
+  .pill-mid  { background: var(--prob-mid-soft);  color: var(--prob-mid); }
+  .pill-low  { background: var(--prob-low-soft);  color: var(--prob-low); }
+
+  /* ── Helpers ─────────────────────────────────────────── */
+  .note {
+    font-size: 12px;
+    color: var(--muted);
+    margin-top: 8px;
+    line-height: 1.5;
+  }
+
+  .divider {
+    height: 1px;
+    background: var(--border-soft);
+    margin: 14px 0;
+  }
+
+  .badge-running {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: var(--accent);
+    font-weight: 500;
+  }
+  .badge-running::before {
+    content: '';
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--accent);
+    animation: pulse 1.2s ease infinite;
+  }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.3; }
+  }
+
+  /* ── Tab control for charts ──────────────────────────── */
+  .tab-bar {
+    display: flex;
+    gap: 4px;
+    margin-bottom: 12px;
+    padding: 4px;
+    background: var(--bg);
+    border-radius: 10px;
+    width: fit-content;
+  }
+  .tab-btn {
+    padding: 7px 14px;
+    background: transparent;
+    color: var(--muted);
+    border-radius: 7px;
+    font-size: 12.5px;
+    font-weight: 500;
+    font-family: 'Inter', sans-serif;
+  }
+  .tab-btn.active {
+    background: var(--surface);
+    color: var(--ink);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+  }
+
+  /* ── Per-epic bars ────────────────────────────────────── */
+  .epic-bars { display: flex; flex-direction: column; gap: 10px; }
+  .epic-bar-row {
+    display: grid;
+    grid-template-columns: 80px 1fr 110px;
+    align-items: center;
+    gap: 12px;
+    font-size: 13px;
+  }
+  .epic-bar-row .name {
+    font-weight: 500;
+    color: var(--ink);
+  }
+  .epic-bar-track {
+    height: 24px;
+    background: var(--bg);
+    border-radius: 6px;
+    position: relative;
+    overflow: hidden;
+  }
+  .epic-bar-fill {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    background: linear-gradient(90deg, var(--accent) 0%, #2A5A85 100%);
+    border-radius: 6px;
+    transition: all 0.4s ease;
+  }
+  .epic-bar-fill-range {
+    position: absolute;
+    top: 4px;
+    bottom: 4px;
+    background: rgba(31, 78, 121, 0.15);
+    border-left: 2px solid var(--accent);
+    border-right: 2px solid var(--accent);
+  }
+  .epic-bar-value {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    color: var(--muted);
+    text-align: right;
+  }
+
+  footer {
+    margin-top: 40px;
+    padding-top: 20px;
+    border-top: 1px solid var(--border);
+    font-size: 12px;
+    color: var(--muted);
+    text-align: center;
+    font-family: 'JetBrains Mono', monospace;
+    letter-spacing: 0.04em;
+  }
+
+  /* Mobile tweaks */
+  @media (max-width: 640px) {
+    body { padding: 16px 14px 32px; }
+    .input-row { grid-template-columns: 1fr; }
+    .epic-bar-row { grid-template-columns: 60px 1fr 90px; gap: 8px; font-size: 12px; }
+    h1 { font-size: 26px; }
+    .stat-value { font-size: 28px; }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <!-- ── HEADER ───────────────────────────────────────── -->
+  <header class="page-header">
+    <div>
+      <div class="eyebrow">Monte Carlo · Prognoza dostarczenia</div>
+      <h1>Prognoza dostarczenia 6 Epików</h1>
+      <div class="subtitle" id="subtitle">Start: 1 lipca 2026 · Cel: 31 października 2026</div>
+    </div>
+    <div class="header-status">
+      <div>Symulacje: <strong id="sim-count-display">10 000</strong></div>
+      <div>Status: <span id="sim-status" class="badge-running">obliczanie…</span></div>
+    </div>
+  </header>
+
+  <!-- ── SUMMARY CARDS ────────────────────────────────── -->
+  <section class="summary">
+    <div class="stat-card featured">
+      <div class="stat-label">Prawdopodobieństwo dotrzymania celu</div>
+      <div class="stat-value"><span id="prob-target">–</span>%</div>
+      <div class="stat-subvalue" id="prob-target-desc">do <span id="prob-target-date">31.10.2026</span></div>
+      <div class="stat-bar"><div class="stat-bar-fill" id="prob-target-bar" style="width:0%"></div></div>
+    </div>
+
+    <div class="stat-card">
+      <div class="stat-label">P50 · Mediana</div>
+      <div class="stat-value" id="p50-date">–</div>
+      <div class="stat-subvalue"><span id="p50-sprints">–</span> sprintów</div>
+    </div>
+
+    <div class="stat-card">
+      <div class="stat-label">P85 · Bezpieczna prognoza</div>
+      <div class="stat-value" id="p85-date">–</div>
+      <div class="stat-subvalue"><span id="p85-sprints">–</span> sprintów</div>
+    </div>
+
+    <div class="stat-card">
+      <div class="stat-label">P95 · Pesymistyczna</div>
+      <div class="stat-value" id="p95-date">–</div>
+      <div class="stat-subvalue"><span id="p95-sprints">–</span> sprintów</div>
+    </div>
+  </section>
+
+  <!-- ── MAIN GRID ────────────────────────────────────── -->
+  <div class="grid-main">
+
+    <!-- ── LEFT: INPUTS ─────────────────────────────────── -->
+    <aside>
+
+      <!-- Daty -->
+      <div class="panel">
+        <h2><span class="num">01</span> Daty</h2>
+        <div class="input-group">
+          <label for="start-date">Data startu</label>
+          <input type="date" id="start-date" value="2026-07-01" />
+        </div>
+        <div class="input-group">
+          <label for="target-date">Data docelowa</label>
+          <input type="date" id="target-date" value="2026-10-31" />
+        </div>
+        <div class="input-group">
+          <label for="sprint-length">Długość sprintu (dni)</label>
+          <input type="number" id="sprint-length" value="14" min="1" max="60" />
+        </div>
+      </div>
+
+      <!-- Parametry zespołu -->
+      <div class="panel">
+        <h2><span class="num">02</span> Parametry zespołu</h2>
+
+        <div class="input-group">
+          <div class="slider-row">
+            <span>Focus factor</span>
+            <span class="slider-value"><span id="focus-val">75</span>%</span>
+          </div>
+          <input type="range" id="focus-factor" min="20" max="100" step="5" value="75" />
+          <div class="note">Udział czasu zespołu poświęcony tym Epikom.</div>
+        </div>
+
+        <div class="divider"></div>
+
+        <div class="input-group">
+          <div class="slider-row">
+            <span>Boost we wrześniu</span>
+            <span class="slider-value">×<span id="sept-val">1.15</span></span>
+          </div>
+          <input type="range" id="sept-boost" min="1.0" max="1.5" step="0.05" value="1.15" />
+          <div class="note">Po urlopach + lepsza znajomość domeny.</div>
+        </div>
+
+        <div class="divider"></div>
+
+        <h3>Krzywa uczenia się</h3>
+        <div class="input-row">
+          <div>
+            <label>Epiki 1–2 ×</label>
+            <input type="number" id="early-mult" value="0.9" min="0.3" max="1.5" step="0.05" />
+          </div>
+          <div>
+            <label>Epiki 3–6 ×</label>
+            <input type="number" id="late-mult" value="1.05" min="0.5" max="2.0" step="0.05" />
+          </div>
+        </div>
+        <div class="note">Zespół już zna pierwsze 2 Epiki, kolejne 4 zrozumie lepiej.</div>
+      </div>
+
+      <!-- Estymacje Epików -->
+      <div class="panel">
+        <h2><span class="num">03</span> Estymacje Epików</h2>
+        <table class="epic-table">
+          <thead>
+            <tr>
+              <th>Nazwa</th>
+              <th class="num-col">Min</th>
+              <th class="num-col">Max</th>
+              <th class="action-col"></th>
+            </tr>
+          </thead>
+          <tbody id="epic-tbody"></tbody>
+        </table>
+        <div class="btn-row">
+          <button class="btn-secondary" id="add-epic-btn">+ Dodaj Epik</button>
+        </div>
+        <div class="note">Wartości w historyjkach (story points / items).</div>
+      </div>
+
+      <!-- Throughput -->
+      <div class="panel">
+        <h2><span class="num">04</span> Historyczne tempo</h2>
+        <div class="tp-list" id="tp-list"></div>
+        <div class="tp-add">
+          <input type="number" id="tp-input" placeholder="np. 5" min="0" max="50" />
+          <button id="tp-add-btn">Dodaj</button>
+        </div>
+        <div class="note">Liczba historyjek ukończonych w 2-tygodniowych okresach.</div>
+      </div>
+
+      <!-- Symulacja -->
+      <div class="panel">
+        <h2><span class="num">05</span> Symulacja</h2>
+        <div class="input-group">
+          <label for="num-sims">Liczba przebiegów</label>
+          <select id="num-sims">
+            <option value="1000">1 000 (szybko)</option>
+            <option value="5000">5 000</option>
+            <option value="10000" selected>10 000 (zalecane)</option>
+            <option value="25000">25 000</option>
+            <option value="50000">50 000 (precyzyjnie)</option>
+          </select>
+        </div>
+        <button class="btn-primary" id="run-btn">Uruchom symulację →</button>
+        <div class="btn-row">
+          <button class="btn-secondary" id="reset-btn">Reset</button>
+          <button class="btn-secondary" id="export-btn">Eksport CSV</button>
+        </div>
+      </div>
+
+    </aside>
+
+    <!-- ── RIGHT: CHARTS ───────────────────────────────── -->
+    <main>
+
+      <!-- S-curve -->
+      <div class="panel">
+        <div class="chart-header">
+          <div>
+            <h2 style="border:none; margin:0; padding:0;">Krzywa prawdopodobieństwa ukończenia</h2>
+            <div class="note" style="margin-top: 4px;">P(ukończenie przed datą). Czerwona pionowa linia = data docelowa.</div>
+          </div>
+          <div class="chart-legend-inline">
+            <span class="legend-dot curve">Skumulowane P</span>
+            <span class="legend-dot target">Cel</span>
+          </div>
+        </div>
+        <div class="chart-container tall">
+          <canvas id="scurve-chart"></canvas>
+        </div>
+      </div>
+
+      <!-- Histogram + per-sprint -->
+      <div class="panel">
+        <div class="chart-header">
+          <div>
+            <h2 style="border:none; margin:0; padding:0;">Rozkład prognozy</h2>
+            <div class="note" style="margin-top: 4px;">Częstość scenariuszy zakończonych w danym tygodniu / przy danej liczbie sprintów.</div>
+          </div>
+          <div class="tab-bar">
+            <button class="tab-btn active" data-tab="hist-dates">Daty</button>
+            <button class="tab-btn" data-tab="hist-sprints">Sprinty</button>
+          </div>
+        </div>
+        <div class="chart-container">
+          <canvas id="hist-chart"></canvas>
+        </div>
+      </div>
+
+      <!-- Tabela percentyli -->
+      <div class="panel">
+        <h2><span class="num">·</span> Percentyle prawdopodobieństwa</h2>
+        <table class="prob-table">
+          <thead>
+            <tr>
+              <th>Poziom pewności</th>
+              <th>Data ukończenia</th>
+              <th>Liczba sprintów</th>
+              <th>Status vs cel</th>
+            </tr>
+          </thead>
+          <tbody id="percentile-tbody"></tbody>
+        </table>
+      </div>
+
+      <!-- Per-epic ranges -->
+      <div class="panel">
+        <h2><span class="num">·</span> Zakres estymacji Epików</h2>
+        <div class="epic-bars" id="epic-bars"></div>
+        <div class="note" style="margin-top: 14px;">
+          Łączna suma historyjek do dostarczenia:
+          <strong style="color: var(--ink); font-family: 'JetBrains Mono', monospace;" id="total-min">–</strong>
+          do
+          <strong style="color: var(--ink); font-family: 'JetBrains Mono', monospace;" id="total-max">–</strong>
+          (średnio <span id="total-avg" style="font-family: 'JetBrains Mono', monospace; color: var(--ink);">–</span>).
+        </div>
+      </div>
+
+    </main>
+  </div>
+
+  <footer>
+    Monte Carlo · 10 000 + przebiegów · próbkowanie tempa z replacement<br>
+    Generowane lokalnie w przeglądarce — brak wysyłki danych
+  </footer>
+</div>
+
+<script>
+/* ════════════════════════════════════════════════════════
+   STAN APLIKACJI
+   ════════════════════════════════════════════════════════ */
+const defaultState = {
+  startDate: '2026-07-01',
+  targetDate: '2026-10-31',
+  sprintLengthDays: 14,
+  focusFactor: 0.75,
+  septemberBoost: 1.15,
+  earlyMult: 0.9,
+  lateMult: 1.05,
+  numSimulations: 10000,
+  epics: [
+    { name: 'Epik 1', min: 4, max: 6 },
+    { name: 'Epik 2', min: 3, max: 5 },
+    { name: 'Epik 3', min: 3, max: 4 },
+    { name: 'Epik 4', min: 3, max: 5 },
+    { name: 'Epik 5', min: 4, max: 7 },
+    { name: 'Epik 6', min: 4, max: 8 }
+  ],
+  throughput: [3, 4, 5, 4, 2, 7, 4, 5]
+};
+
+let state = structuredClone(defaultState);
+let lastResults = null;
+let scurveChart = null;
+let histChart = null;
+let histMode = 'hist-dates';
+
+/* ════════════════════════════════════════════════════════
+   SYMULACJA MONTE CARLO
+   ════════════════════════════════════════════════════════ */
+function runSimulation(cfg) {
+  const startDate = new Date(cfg.startDate);
+  const completionDates = [];
+  const sprintCounts = [];
+  const totalStoriesArr = [];
+
+  const earlyStoriesMin = cfg.epics[0].min + (cfg.epics[1]?.min ?? 0);
+  const earlyStoriesMax = cfg.epics[0].max + (cfg.epics[1]?.max ?? 0);
+
+  const maxSprints = 100;
+
+  for (let sim = 0; sim < cfg.numSimulations; sim++) {
+    // Próbkowanie wielkości Epików (rozkład jednostajny min–max)
+    let earlyStories = 0;
+    let totalStories = 0;
+    cfg.epics.forEach((e, i) => {
+      const size = e.min + Math.random() * (e.max - e.min);
+      totalStories += size;
+      if (i < 2) earlyStories += size;
+    });
+    totalStoriesArr.push(totalStories);
+
+    // Symulacja sprint-by-sprint
+    let storiesDone = 0;
+    let sprints = 0;
+
+    while (storiesDone < totalStories && sprints < maxSprints) {
+      const sprintMidMs = startDate.getTime() +
+        (sprints * cfg.sprintLengthDays + Math.floor(cfg.sprintLengthDays / 2)) * 86400000;
+      const sprintMidDate = new Date(sprintMidMs);
+
+      // Próbkowanie tempa (bootstrap)
+      const baseTp = cfg.throughput[Math.floor(Math.random() * cfg.throughput.length)];
+      let adjusted = baseTp * cfg.focusFactor;
+
+      // Krzywa uczenia się — czy nadal jesteśmy w fazie Epików 1–2?
+      if (storiesDone < earlyStories) {
+        adjusted *= cfg.earlyMult;
+      } else {
+        adjusted *= cfg.lateMult;
+      }
+
+      // Boost wrześniowy
+      if (sprintMidDate.getMonth() === 8) { // 8 = wrzesień (0-indexed)
+        adjusted *= cfg.septemberBoost;
+      }
+
+      storiesDone += adjusted;
+      sprints++;
+    }
+
+    sprintCounts.push(sprints);
+    const completionTs = startDate.getTime() + sprints * cfg.sprintLengthDays * 86400000;
+    completionDates.push(completionTs);
+  }
+
+  return { completionDates, sprintCounts, totalStoriesArr };
+}
+
+/* ════════════════════════════════════════════════════════
+   STATYSTYKI
+   ════════════════════════════════════════════════════════ */
+function percentile(sortedArr, p) {
+  const idx = Math.min(sortedArr.length - 1, Math.floor(p * sortedArr.length));
+  return sortedArr[idx];
+}
+
+function computeStats(results, targetDateStr) {
+  const targetTs = new Date(targetDateStr).getTime();
+  const sortedDates = [...results.completionDates].sort((a, b) => a - b);
+  const sortedSprints = [...results.sprintCounts].sort((a, b) => a - b);
+  const sortedStories = [...results.totalStoriesArr].sort((a, b) => a - b);
+
+  const probTarget = results.completionDates.filter(d => d <= targetTs).length /
+                     results.completionDates.length;
+
+  return {
+    probTarget: probTarget * 100,
+    p50: percentile(sortedDates, 0.50),
+    p75: percentile(sortedDates, 0.75),
+    p85: percentile(sortedDates, 0.85),
+    p95: percentile(sortedDates, 0.95),
+    p50Sprints: percentile(sortedSprints, 0.50),
+    p75Sprints: percentile(sortedSprints, 0.75),
+    p85Sprints: percentile(sortedSprints, 0.85),
+    p95Sprints: percentile(sortedSprints, 0.95),
+    sortedDates,
+    sortedSprints,
+    sortedStories,
+    totalAvg: sortedStories.reduce((a, b) => a + b, 0) / sortedStories.length,
+    totalMin: sortedStories[0],
+    totalMax: sortedStories[sortedStories.length - 1]
+  };
+}
+
+/* ════════════════════════════════════════════════════════
+   FORMATOWANIE
+   ════════════════════════════════════════════════════════ */
+const PL_MONTHS_SHORT = ['sty','lut','mar','kwi','maj','cze','lip','sie','wrz','paź','lis','gru'];
+function formatDateShort(ts) {
+  const d = new Date(ts);
+  return `${d.getDate()} ${PL_MONTHS_SHORT[d.getMonth()]} ${d.getFullYear()}`;
+}
+function formatDateNumeric(ts) {
+  const d = new Date(ts);
+  const dd = String(d.getDate()).padStart(2, '0');
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  return `${dd}.${mm}.${d.getFullYear()}`;
+}
+function fmtNum(n, digits = 0) {
+  return n.toLocaleString('pl-PL', { minimumFractionDigits: digits, maximumFractionDigits: digits });
+}
+
+/* ════════════════════════════════════════════════════════
+   RENDEROWANIE — UI INPUTS
+   ════════════════════════════════════════════════════════ */
+function renderEpicsTable() {
+  const tbody = document.getElementById('epic-tbody');
+  tbody.innerHTML = '';
+  state.epics.forEach((e, idx) => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td><input type="text" value="${e.name}" data-idx="${idx}" data-field="name" /></td>
+      <td><input type="number" value="${e.min}" data-idx="${idx}" data-field="min" min="0" max="100" step="1" /></td>
+      <td><input type="number" value="${e.max}" data-idx="${idx}" data-field="max" min="0" max="100" step="1" /></td>
+      <td class="action-cell"><button class="btn-icon" data-remove="${idx}" title="Usuń">×</button></td>
+    `;
+    tbody.appendChild(tr);
+  });
+
+  tbody.querySelectorAll('input').forEach(inp => {
+    inp.addEventListener('change', (ev) => {
+      const idx = +ev.target.dataset.idx;
+      const field = ev.target.dataset.field;
+      if (field === 'name') state.epics[idx].name = ev.target.value;
+      else state.epics[idx][field] = +ev.target.value;
+      if (field !== 'name') validateEpic(idx);
+    });
+  });
+  tbody.querySelectorAll('[data-remove]').forEach(btn => {
+    btn.addEventListener('click', (ev) => {
+      const idx = +ev.target.dataset.remove;
+      state.epics.splice(idx, 1);
+      renderEpicsTable();
+    });
+  });
+}
+
+function validateEpic(idx) {
+  const e = state.epics[idx];
+  if (e.max < e.min) {
+    e.max = e.min;
+    renderEpicsTable();
+  }
+}
+
+function renderThroughput() {
+  const list = document.getElementById('tp-list');
+  list.innerHTML = '';
+  state.throughput.forEach((v, idx) => {
+    const tag = document.createElement('span');
+    tag.className = 'tp-tag';
+    tag.innerHTML = `${v}<button data-tp-remove="${idx}">×</button>`;
+    list.appendChild(tag);
+  });
+  list.querySelectorAll('[data-tp-remove]').forEach(btn => {
+    btn.addEventListener('click', (ev) => {
+      const idx = +ev.target.dataset.tpRemove;
+      state.throughput.splice(idx, 1);
+      renderThroughput();
+    });
+  });
+}
+
+function renderEpicBars(stats) {
+  const container = document.getElementById('epic-bars');
+  container.innerHTML = '';
+  const globalMax = Math.max(...state.epics.map(e => e.max));
+  state.epics.forEach((e) => {
+    const minPct = (e.min / globalMax) * 100;
+    const maxPct = (e.max / globalMax) * 100;
+    const row = document.createElement('div');
+    row.className = 'epic-bar-row';
+    row.innerHTML = `
+      <div class="name">${e.name}</div>
+      <div class="epic-bar-track">
+        <div class="epic-bar-fill-range" style="left:${minPct}%; width:${maxPct - minPct}%"></div>
+        <div class="epic-bar-fill" style="left:0; width:${minPct}%"></div>
+      </div>
+      <div class="epic-bar-value">${e.min} – ${e.max} hist.</div>
+    `;
+    container.appendChild(row);
+  });
+
+  if (stats) {
+    document.getElementById('total-min').textContent = fmtNum(stats.totalMin, 1);
+    document.getElementById('total-max').textContent = fmtNum(stats.totalMax, 1);
+    document.getElementById('total-avg').textContent = fmtNum(stats.totalAvg, 1);
+  }
+}
+
+/* ════════════════════════════════════════════════════════
+   RENDEROWANIE — WYKRESY
+   ════════════════════════════════════════════════════════ */
+Chart.defaults.font.family = "'Inter', sans-serif";
+Chart.defaults.color = '#6E7681';
+Chart.defaults.borderColor = '#EAE6DC';
+
+function renderSCurve(stats, results, targetDateStr) {
+  const ctx = document.getElementById('scurve-chart').getContext('2d');
+  if (scurveChart) scurveChart.destroy();
+
+  // Buduj S-curve: dla każdej unikalnej daty udział scenariuszy <= ta data
+  const sorted = stats.sortedDates;
+  const N = sorted.length;
+  const numBuckets = 80;
+  const minD = sorted[0];
+  const maxD = sorted[N - 1];
+  const range = maxD - minD || 1;
+  const points = [];
+  for (let i = 0; i <= numBuckets; i++) {
+    const t = minD + (i / numBuckets) * range;
+    // znajdź ile <= t (binary search)
+    let lo = 0, hi = N;
+    while (lo < hi) {
+      const mid = (lo + hi) >>> 1;
+      if (sorted[mid] <= t) lo = mid + 1; else hi = mid;
+    }
+    points.push({ x: t, y: (lo / N) * 100 });
+  }
+
+  const targetTs = new Date(targetDateStr).getTime();
+  const probAtTarget = stats.probTarget;
+
+  // Strefy kolorów (wypełnienie pod krzywą)
+  scurveChart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      datasets: [
+        {
+          label: 'Skumulowane P (%)',
+          data: points,
+          borderColor: '#1F4E79',
+          backgroundColor: 'rgba(31, 78, 121, 0.08)',
+          borderWidth: 2.5,
+          fill: true,
+          pointRadius: 0,
+          pointHoverRadius: 5,
+          tension: 0.2
+        },
+        {
+          label: 'Cel',
+          data: [
+            { x: targetTs, y: 0 },
+            { x: targetTs, y: 100 }
+          ],
+          borderColor: '#A8423F',
+          borderWidth: 2,
+          borderDash: [6, 4],
+          pointRadius: 0,
+          fill: false,
+          showLine: true
+        },
+        {
+          label: 'P @ cel',
+          data: [{ x: targetTs, y: probAtTarget }],
+          backgroundColor: '#A8423F',
+          borderColor: '#A8423F',
+          pointRadius: 6,
+          pointHoverRadius: 8,
+          showLine: false
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: '#1B1F23',
+          titleFont: { family: "'JetBrains Mono', monospace", size: 11 },
+          bodyFont: { family: "'Inter', sans-serif", size: 12, weight: '500' },
+          padding: 10,
+          cornerRadius: 6,
+          callbacks: {
+            title: (items) => formatDateShort(items[0].parsed.x),
+            label: (item) => {
+              if (item.datasetIndex === 1) return null;
+              if (item.datasetIndex === 2) return `Prawd. dotrzymania celu: ${item.parsed.y.toFixed(1)}%`;
+              return `P(ukończenie): ${item.parsed.y.toFixed(1)}%`;
+            }
+          }
+        }
+      },
+      scales: {
+        x: {
+          type: 'linear',
+          ticks: {
+            callback: (v) => formatDateShort(v),
+            font: { size: 11, family: "'JetBrains Mono', monospace" }
+          },
+          grid: { color: '#EFECE3' }
+        },
+        y: {
+          min: 0, max: 100,
+          ticks: {
+            callback: (v) => v + '%',
+            font: { size: 11, family: "'JetBrains Mono', monospace" }
+          },
+          grid: { color: '#EFECE3' },
+          title: {
+            display: true,
+            text: 'Prawdopodobieństwo ukończenia',
+            font: { size: 11, family: "'JetBrains Mono', monospace" },
+            color: '#6E7681'
+          }
+        }
+      }
+    }
+  });
+}
+
+function renderHistogram(stats, mode) {
+  const ctx = document.getElementById('hist-chart').getContext('2d');
+  if (histChart) histChart.destroy();
+
+  if (mode === 'hist-sprints') {
+    // Histogram liczby sprintów
+    const counts = {};
+    stats.sortedSprints.forEach(s => {
+      counts[s] = (counts[s] || 0) + 1;
+    });
+    const keys = Object.keys(counts).map(Number).sort((a, b) => a - b);
+    const labels = keys.map(k => `${k}`);
+    const values = keys.map(k => counts[k]);
+    const total = values.reduce((a, b) => a + b, 0);
+
+    histChart = new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels,
+        datasets: [{
+          label: 'Liczba scenariuszy',
+          data: values,
+          backgroundColor: '#1F4E79',
+          borderRadius: 4,
+          borderSkipped: false,
+          maxBarThickness: 36
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            backgroundColor: '#1B1F23',
+            padding: 10,
+            cornerRadius: 6,
+            callbacks: {
+              title: (items) => `${items[0].label} sprintów`,
+              label: (item) => {
+                const pct = (item.parsed.y / total * 100).toFixed(1);
+                return `${item.parsed.y} scenariuszy (${pct}%)`;
+              }
+            }
+          }
+        },
+        scales: {
+          x: {
+            grid: { display: false },
+            title: {
+              display: true,
+              text: 'Liczba sprintów (2-tygodniowych)',
+              font: { size: 11, family: "'JetBrains Mono', monospace" },
+              color: '#6E7681'
+            }
+          },
+          y: {
+            grid: { color: '#EFECE3' },
+            ticks: { font: { size: 11, family: "'JetBrains Mono', monospace" } },
+            title: {
+              display: true,
+              text: 'Liczba scenariuszy',
+              font: { size: 11, family: "'JetBrains Mono', monospace" },
+              color: '#6E7681'
+            }
+          }
+        }
+      }
+    });
+  } else {
+    // Histogram dat ukończenia (binowanie tygodniowe)
+    const sorted = stats.sortedDates;
+    const minD = sorted[0];
+    const maxD = sorted[sorted.length - 1];
+    const binMs = 7 * 86400000; // bin = 1 tydzień
+    const numBins = Math.max(8, Math.ceil((maxD - minD) / binMs));
+    const bins = new Array(numBins).fill(0);
+    sorted.forEach(t => {
+      const idx = Math.min(numBins - 1, Math.floor((t - minD) / binMs));
+      bins[idx]++;
+    });
+    const labels = bins.map((_, i) => formatDateShort(minD + i * binMs));
+    const total = sorted.length;
+
+    const targetTs = new Date(state.targetDate).getTime();
+    const colors = bins.map((_, i) => {
+      const binStart = minD + i * binMs;
+      return binStart <= targetTs ? '#4A7C59' : '#A8423F';
+    });
+
+    histChart = new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels,
+        datasets: [{
+          label: 'Liczba scenariuszy',
+          data: bins,
+          backgroundColor: colors,
+          borderRadius: 3,
+          borderSkipped: false,
+          maxBarThickness: 28
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            backgroundColor: '#1B1F23',
+            padding: 10,
+            cornerRadius: 6,
+            callbacks: {
+              title: (items) => `Tydzień rozp. ${items[0].label}`,
+              label: (item) => {
+                const pct = (item.parsed.y / total * 100).toFixed(1);
+                return `${item.parsed.y} scenariuszy (${pct}%)`;
+              }
+            }
+          }
+        },
+        scales: {
+          x: {
+            grid: { display: false },
+            ticks: {
+              font: { size: 10, family: "'JetBrains Mono', monospace" },
+              maxRotation: 45,
+              minRotation: 45,
+              autoSkip: true,
+              maxTicksLimit: 12
+            },
+            title: {
+              display: true,
+              text: 'Tydzień ukończenia (zielony = przed celem, czerwony = po)',
+              font: { size: 11, family: "'JetBrains Mono', monospace" },
+              color: '#6E7681'
+            }
+          },
+          y: {
+            grid: { color: '#EFECE3' },
+            ticks: { font: { size: 11, family: "'JetBrains Mono', monospace" } }
+          }
+        }
+      }
+    });
+  }
+}
+
+function renderPercentileTable(stats, targetDateStr) {
+  const tbody = document.getElementById('percentile-tbody');
+  const targetTs = new Date(targetDateStr).getTime();
+  const rows = [
+    { label: 'P50 (mediana)',          desc: '50% scenariuszy kończy do tej daty',     date: stats.p50, sprints: stats.p50Sprints },
+    { label: 'P75',                    desc: '75% scenariuszy kończy do tej daty',     date: stats.p75, sprints: stats.p75Sprints },
+    { label: 'P85 (rekomendowana)',    desc: '85% scenariuszy kończy do tej daty',     date: stats.p85, sprints: stats.p85Sprints },
+    { label: 'P95 (zachowawcza)',      desc: '95% scenariuszy kończy do tej daty',     date: stats.p95, sprints: stats.p95Sprints }
+  ];
+  tbody.innerHTML = rows.map(r => {
+    const beforeTarget = r.date <= targetTs;
+    const diffDays = Math.round((r.date - targetTs) / 86400000);
+    let pillClass = beforeTarget ? 'pill-high' : (diffDays <= 14 ? 'pill-mid' : 'pill-low');
+    let pillText = beforeTarget
+      ? `${Math.abs(diffDays)} dni przed celem`
+      : `${diffDays} dni po celu`;
+    return `
+      <tr>
+        <td><strong>${r.label}</strong><div style="font-size:11px;color:var(--muted);font-family:'Inter',sans-serif;margin-top:2px;">${r.desc}</div></td>
+        <td class="numeric">${formatDateNumeric(r.date)}</td>
+        <td class="numeric">${r.sprints}</td>
+        <td><span class="pill ${pillClass}">${pillText}</span></td>
+      </tr>
+    `;
+  }).join('');
+}
+
+/* ════════════════════════════════════════════════════════
+   RENDEROWANIE — SUMMARY CARDS
+   ════════════════════════════════════════════════════════ */
+function renderSummary(stats, targetDateStr) {
+  const p = stats.probTarget;
+  document.getElementById('prob-target').textContent = p.toFixed(1);
+  document.getElementById('prob-target-date').textContent = formatDateNumeric(new Date(targetDateStr).getTime());
+  document.getElementById('prob-target-bar').style.width = p + '%';
+
+  document.getElementById('p50-date').textContent = formatDateNumeric(stats.p50);
+  document.getElementById('p50-sprints').textContent = stats.p50Sprints;
+  document.getElementById('p85-date').textContent = formatDateNumeric(stats.p85);
+  document.getElementById('p85-sprints').textContent = stats.p85Sprints;
+  document.getElementById('p95-date').textContent = formatDateNumeric(stats.p95);
+  document.getElementById('p95-sprints').textContent = stats.p95Sprints;
+
+  // Aktualizuj nagłówek
+  document.getElementById('subtitle').textContent =
+    `Start: ${formatDateShort(new Date(state.startDate).getTime())} · Cel: ${formatDateShort(new Date(state.targetDate).getTime())}`;
+  document.getElementById('sim-count-display').textContent = state.numSimulations.toLocaleString('pl-PL');
+}
+
+/* ════════════════════════════════════════════════════════
+   GŁÓWNY RUN
+   ════════════════════════════════════════════════════════ */
+function runAndRender() {
+  const statusEl = document.getElementById('sim-status');
+  const runBtn = document.getElementById('run-btn');
+  statusEl.className = 'badge-running';
+  statusEl.textContent = 'obliczanie…';
+  runBtn.disabled = true;
+  runBtn.textContent = 'Obliczanie…';
+
+  // Walidacja
+  if (state.epics.length === 0) {
+    alert('Dodaj co najmniej jeden Epik.');
+    statusEl.textContent = 'błąd';
+    runBtn.disabled = false;
+    runBtn.textContent = 'Uruchom symulację →';
+    return;
+  }
+  if (state.throughput.length === 0) {
+    alert('Dodaj co najmniej jedną próbkę tempa.');
+    statusEl.textContent = 'błąd';
+    runBtn.disabled = false;
+    runBtn.textContent = 'Uruchom symulację →';
+    return;
+  }
+
+  // Uruchom asynchronicznie, żeby UI zdążył się zaktualizować
+  setTimeout(() => {
+    const t0 = performance.now();
+    const results = runSimulation(state);
+    const stats = computeStats(results, state.targetDate);
+    lastResults = { results, stats };
+    const elapsed = performance.now() - t0;
+
+    renderSummary(stats, state.targetDate);
+    renderSCurve(stats, results, state.targetDate);
+    renderHistogram(stats, histMode);
+    renderPercentileTable(stats, state.targetDate);
+    renderEpicBars(stats);
+
+    statusEl.className = '';
+    statusEl.style.color = 'var(--prob-high)';
+    statusEl.innerHTML = `✓ gotowe · ${elapsed.toFixed(0)} ms`;
+    runBtn.disabled = false;
+    runBtn.textContent = 'Uruchom ponownie →';
+  }, 50);
+}
+
+/* ════════════════════════════════════════════════════════
+   BINDING UI
+   ════════════════════════════════════════════════════════ */
+function bindInputs() {
+  document.getElementById('start-date').addEventListener('change', (e) => { state.startDate = e.target.value; });
+  document.getElementById('target-date').addEventListener('change', (e) => { state.targetDate = e.target.value; });
+  document.getElementById('sprint-length').addEventListener('change', (e) => { state.sprintLengthDays = +e.target.value; });
+
+  document.getElementById('focus-factor').addEventListener('input', (e) => {
+    state.focusFactor = +e.target.value / 100;
+    document.getElementById('focus-val').textContent = e.target.value;
+  });
+
+  document.getElementById('sept-boost').addEventListener('input', (e) => {
+    state.septemberBoost = +e.target.value;
+    document.getElementById('sept-val').textContent = (+e.target.value).toFixed(2);
+  });
+
+  document.getElementById('early-mult').addEventListener('change', (e) => { state.earlyMult = +e.target.value; });
+  document.getElementById('late-mult').addEventListener('change', (e) => { state.lateMult = +e.target.value; });
+
+  document.getElementById('num-sims').addEventListener('change', (e) => { state.numSimulations = +e.target.value; });
+
+  document.getElementById('add-epic-btn').addEventListener('click', () => {
+    state.epics.push({ name: `Epik ${state.epics.length + 1}`, min: 3, max: 5 });
+    renderEpicsTable();
+  });
+
+  document.getElementById('tp-add-btn').addEventListener('click', () => {
+    const inp = document.getElementById('tp-input');
+    const v = +inp.value;
+    if (!isNaN(v) && v >= 0) {
+      state.throughput.push(v);
+      renderThroughput();
+      inp.value = '';
+      inp.focus();
+    }
+  });
+  document.getElementById('tp-input').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') document.getElementById('tp-add-btn').click();
+  });
+
+  document.getElementById('run-btn').addEventListener('click', runAndRender);
+
+  document.getElementById('reset-btn').addEventListener('click', () => {
+    if (!confirm('Przywrócić wartości domyślne?')) return;
+    state = structuredClone(defaultState);
+    syncInputsFromState();
+    runAndRender();
+  });
+
+  document.getElementById('export-btn').addEventListener('click', exportCSV);
+
+  // Tabs histogram
+  document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      histMode = btn.dataset.tab;
+      if (lastResults) renderHistogram(lastResults.stats, histMode);
+    });
+  });
+}
+
+function syncInputsFromState() {
+  document.getElementById('start-date').value = state.startDate;
+  document.getElementById('target-date').value = state.targetDate;
+  document.getElementById('sprint-length').value = state.sprintLengthDays;
+  document.getElementById('focus-factor').value = state.focusFactor * 100;
+  document.getElementById('focus-val').textContent = (state.focusFactor * 100).toFixed(0);
+  document.getElementById('sept-boost').value = state.septemberBoost;
+  document.getElementById('sept-val').textContent = state.septemberBoost.toFixed(2);
+  document.getElementById('early-mult').value = state.earlyMult;
+  document.getElementById('late-mult').value = state.lateMult;
+  document.getElementById('num-sims').value = state.numSimulations;
+  renderEpicsTable();
+  renderThroughput();
+  renderEpicBars();
+}
+
+function exportCSV() {
+  if (!lastResults) {
+    alert('Najpierw uruchom symulację.');
+    return;
+  }
+  const { results, stats } = lastResults;
+  const lines = [];
+  lines.push('# Prognoza Monte Carlo — eksport wyników');
+  lines.push(`# Wygenerowano: ${new Date().toISOString()}`);
+  lines.push(`# Liczba symulacji: ${state.numSimulations}`);
+  lines.push(`# Data startu: ${state.startDate}, Data celu: ${state.targetDate}`);
+  lines.push('');
+  lines.push('Statystyka,Wartość');
+  lines.push(`P(dotrzymanie celu),${stats.probTarget.toFixed(2)}%`);
+  lines.push(`P50 (data),${formatDateNumeric(stats.p50)}`);
+  lines.push(`P75 (data),${formatDateNumeric(stats.p75)}`);
+  lines.push(`P85 (data),${formatDateNumeric(stats.p85)}`);
+  lines.push(`P95 (data),${formatDateNumeric(stats.p95)}`);
+  lines.push(`P50 (sprinty),${stats.p50Sprints}`);
+  lines.push(`P85 (sprinty),${stats.p85Sprints}`);
+  lines.push(`P95 (sprinty),${stats.p95Sprints}`);
+  lines.push('');
+  lines.push('--- Surowe wyniki ---');
+  lines.push('Symulacja,Data ukończenia,Liczba sprintów,Łącznie historyjek');
+  for (let i = 0; i < results.completionDates.length; i++) {
+    lines.push(`${i + 1},${formatDateNumeric(results.completionDates[i])},${results.sprintCounts[i]},${results.totalStoriesArr[i].toFixed(2)}`);
+  }
+  const blob = new Blob(['\ufeff' + lines.join('\n')], { type: 'text/csv;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `monte-carlo-${new Date().toISOString().slice(0, 10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+/* ════════════════════════════════════════════════════════
+   INIT
+   ════════════════════════════════════════════════════════ */
+window.addEventListener('DOMContentLoaded', () => {
+  syncInputsFromState();
+  bindInputs();
+  runAndRender();
+});
+</script>
+</body>
+</html>
