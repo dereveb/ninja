@@ -1,1 +1,1726 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Prognoza Monte Carlo · Dashboard projektowy</title>
+<meta name="description" content="Probabilistyczna prognoza ukończenia backlogu metodą Monte Carlo — kompletny dashboard z parametrami, wykresami i odpowiedziami na pytania prognostyczne." />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700;9..144,800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
 
+<style>
+  /* ============================================================
+     DESIGN TOKENS
+     ============================================================ */
+  :root {
+    /* Palette: warm parchment + scientific probability colors */
+    --bg:          #F2EFE6;
+    --bg-deep:    #E8E3D4;
+    --paper:      #FBF9F2;
+    --paper-2:    #F7F4EA;
+    --ink:        #1F1B16;
+    --ink-2:      #4B4439;
+    --ink-3:      #7A7264;
+    --rule:       #D8D1BE;
+    --rule-2:     #C2B99F;
+
+    /* Probability bands (median → conservative) */
+    --p50:        #2D5F3F;   /* forest green – likely */
+    --p50-soft:   #C5D6CB;
+    --p85:        #B8732A;   /* amber – careful */
+    --p85-soft:   #ECD5B3;
+    --p95:        #963535;   /* brick – conservative */
+    --p95-soft:   #E8C6C2;
+
+    /* Structural accent */
+    --navy:       #1A2942;
+    --navy-soft:  #C2C9D6;
+
+    /* Type */
+    --font-display: 'Fraunces', 'Times New Roman', serif;
+    --font-body:    'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    --font-mono:    'JetBrains Mono', 'SF Mono', Menlo, monospace;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html { scroll-behavior: smooth; }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--font-body);
+    font-size: 15px;
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
+  }
+
+  /* subtle paper texture via SVG noise */
+  body::before {
+    content: "";
+    position: fixed; inset: 0;
+    pointer-events: none;
+    opacity: 0.35;
+    z-index: 0;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='240' height='240'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0.12  0 0 0 0 0.11  0 0 0 0 0.08  0 0 0 0.035 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+  }
+
+  main {
+    position: relative;
+    z-index: 1;
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 48px 32px 96px;
+  }
+
+  /* ============================================================
+     HEADER
+     ============================================================ */
+  .masthead {
+    display: grid;
+    grid-template-columns: 1.4fr 1fr;
+    gap: 48px;
+    padding-bottom: 36px;
+    margin-bottom: 36px;
+    border-bottom: 1px solid var(--rule-2);
+    align-items: end;
+  }
+  .eyebrow {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--ink-3);
+    margin-bottom: 14px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .eyebrow::before {
+    content: "";
+    display: inline-block;
+    width: 24px; height: 1px;
+    background: var(--ink-3);
+  }
+  .masthead h1 {
+    font-family: var(--font-display);
+    font-weight: 600;
+    font-style: normal;
+    font-size: clamp(38px, 5vw, 64px);
+    line-height: 1;
+    letter-spacing: -0.02em;
+    color: var(--ink);
+    font-variation-settings: "opsz" 144, "SOFT" 30;
+  }
+  .masthead h1 em {
+    font-style: italic;
+    font-weight: 500;
+    color: var(--p50);
+    font-variation-settings: "opsz" 144, "SOFT" 100;
+  }
+  .masthead .lede {
+    font-size: 15px;
+    color: var(--ink-2);
+    max-width: 52ch;
+    margin-top: 16px;
+  }
+  .masthead .meta {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 18px 32px;
+    padding-bottom: 4px;
+  }
+  .meta-item {
+    border-left: 1px solid var(--rule-2);
+    padding-left: 14px;
+  }
+  .meta-item .label {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--ink-3);
+    margin-bottom: 4px;
+  }
+  .meta-item .value {
+    font-family: var(--font-mono);
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--ink);
+  }
+
+  /* ============================================================
+     SECTION HEADERS
+     ============================================================ */
+  .section-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    margin: 56px 0 20px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--rule);
+  }
+  .section-head .num {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    letter-spacing: 0.18em;
+    color: var(--ink-3);
+    text-transform: uppercase;
+  }
+  .section-head h2 {
+    font-family: var(--font-display);
+    font-weight: 500;
+    font-size: 26px;
+    letter-spacing: -0.01em;
+    color: var(--ink);
+    font-variation-settings: "opsz" 60;
+  }
+  .section-head .right {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--ink-3);
+    letter-spacing: 0.06em;
+  }
+
+  /* ============================================================
+     KEY RESULTS – probability cards
+     ============================================================ */
+  .results {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 16px;
+  }
+  .result-card {
+    background: var(--paper);
+    border: 1px solid var(--rule);
+    padding: 22px 22px 24px;
+    position: relative;
+    overflow: hidden;
+  }
+  .result-card::before {
+    content: "";
+    position: absolute;
+    inset: 0 0 auto 0;
+    height: 3px;
+  }
+  .result-card.is-p50::before { background: var(--p50); }
+  .result-card.is-p85::before { background: var(--p85); }
+  .result-card.is-p95::before { background: var(--p95); }
+  .result-card.is-sept::before { background: var(--navy); }
+
+  .result-card .pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    font-weight: 600;
+    padding: 4px 8px;
+    border-radius: 999px;
+    margin-bottom: 14px;
+  }
+  .result-card.is-p50 .pill { background: var(--p50-soft); color: var(--p50); }
+  .result-card.is-p85 .pill { background: var(--p85-soft); color: var(--p85); }
+  .result-card.is-p95 .pill { background: var(--p95-soft); color: var(--p95); }
+  .result-card.is-sept .pill { background: var(--navy-soft); color: var(--navy); }
+
+  .result-card .headline {
+    font-family: var(--font-display);
+    font-weight: 500;
+    font-size: 30px;
+    line-height: 1.05;
+    letter-spacing: -0.01em;
+    color: var(--ink);
+    margin-bottom: 6px;
+    font-variation-settings: "opsz" 60;
+  }
+  .result-card .sub {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--ink-3);
+  }
+  .result-card .delta {
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px dashed var(--rule);
+    font-size: 12px;
+    color: var(--ink-2);
+    line-height: 1.45;
+  }
+  .result-card .delta strong {
+    font-family: var(--font-mono);
+    font-weight: 600;
+    color: var(--ink);
+  }
+
+  /* ============================================================
+     LAYOUT GRID for parameters + charts
+     ============================================================ */
+  .grid-main {
+    display: grid;
+    grid-template-columns: 340px 1fr;
+    gap: 32px;
+    align-items: start;
+  }
+
+  /* ============================================================
+     PARAMETER PANEL
+     ============================================================ */
+  .panel {
+    background: var(--paper);
+    border: 1px solid var(--rule);
+    padding: 26px 24px;
+    position: sticky;
+    top: 20px;
+  }
+  .panel h3 {
+    font-family: var(--font-display);
+    font-weight: 500;
+    font-size: 18px;
+    color: var(--ink);
+    margin-bottom: 4px;
+    font-variation-settings: "opsz" 36;
+  }
+  .panel .panel-sub {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--ink-3);
+    margin-bottom: 20px;
+  }
+  .field {
+    margin-bottom: 18px;
+  }
+  .field-label {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    font-size: 13px;
+    color: var(--ink-2);
+    margin-bottom: 8px;
+    font-weight: 500;
+  }
+  .field-label .field-value {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--ink);
+    background: var(--bg);
+    padding: 2px 7px;
+    border-radius: 3px;
+  }
+  .field-label .field-value.is-p50 { color: var(--p50); }
+  .field-label .field-value.is-p85 { color: var(--p85); }
+  .field-label .field-value.is-p95 { color: var(--p95); }
+
+  input[type=range] {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 100%;
+    height: 4px;
+    background: var(--rule);
+    border-radius: 2px;
+    outline: none;
+    cursor: pointer;
+  }
+  input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 16px; height: 16px;
+    border-radius: 50%;
+    background: var(--ink);
+    border: 2px solid var(--paper);
+    box-shadow: 0 0 0 1px var(--ink);
+    cursor: pointer;
+    transition: transform 0.1s;
+  }
+  input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.15); }
+  input[type=range]::-moz-range-thumb {
+    width: 14px; height: 14px;
+    border-radius: 50%;
+    background: var(--ink);
+    border: 2px solid var(--paper);
+    box-shadow: 0 0 0 1px var(--ink);
+    cursor: pointer;
+  }
+
+  input[type=text], input[type=date], input[type=number] {
+    width: 100%;
+    background: var(--bg);
+    border: 1px solid var(--rule);
+    padding: 8px 10px;
+    font-family: var(--font-mono);
+    font-size: 13px;
+    color: var(--ink);
+    border-radius: 3px;
+  }
+  input[type=text]:focus, input[type=date]:focus, input[type=number]:focus {
+    outline: none;
+    border-color: var(--ink);
+  }
+
+  .field-range-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+  .field-helper {
+    font-size: 11px;
+    color: var(--ink-3);
+    margin-top: 5px;
+    line-height: 1.4;
+  }
+
+  .panel-divider {
+    height: 1px;
+    background: var(--rule);
+    margin: 22px -24px 22px;
+  }
+
+  .panel-cta {
+    width: 100%;
+    background: var(--ink);
+    color: var(--paper);
+    border: none;
+    padding: 12px;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+  .panel-cta:hover { background: var(--p50); }
+  .panel-cta.is-secondary {
+    background: var(--paper);
+    color: var(--ink);
+    border: 1px solid var(--ink);
+    margin-top: 8px;
+  }
+  .panel-cta.is-secondary:hover { background: var(--bg-deep); }
+
+  /* ============================================================
+     CHART AREA
+     ============================================================ */
+  .chart-stack { display: flex; flex-direction: column; gap: 28px; }
+  .chart-card {
+    background: var(--paper);
+    border: 1px solid var(--rule);
+    padding: 26px 28px 28px;
+  }
+  .chart-card .chart-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 24px;
+    margin-bottom: 20px;
+  }
+  .chart-card .chart-title {
+    font-family: var(--font-display);
+    font-weight: 500;
+    font-size: 22px;
+    letter-spacing: -0.005em;
+    color: var(--ink);
+    font-variation-settings: "opsz" 48;
+    margin-bottom: 4px;
+  }
+  .chart-card .chart-caption {
+    font-size: 13px;
+    color: var(--ink-2);
+    max-width: 62ch;
+    line-height: 1.5;
+  }
+  .chart-card .chart-legend {
+    display: flex;
+    gap: 16px;
+    align-items: center;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--ink-2);
+    flex-wrap: wrap;
+  }
+  .legend-item { display: flex; align-items: center; gap: 6px; white-space: nowrap; }
+  .legend-swatch {
+    width: 12px; height: 12px; display: inline-block;
+  }
+  .legend-swatch.line {
+    height: 0; width: 16px;
+    border-top: 2px dashed currentColor;
+  }
+
+  /* SVG chart container */
+  .svg-wrap {
+    width: 100%;
+    overflow: visible;
+    position: relative;
+  }
+  .svg-wrap svg {
+    width: 100%;
+    height: auto;
+    display: block;
+    overflow: visible;
+  }
+
+  .axis-label {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    fill: var(--ink-3);
+  }
+  .axis-line { stroke: var(--rule-2); stroke-width: 1; }
+  .grid-line { stroke: var(--rule); stroke-width: 1; stroke-dasharray: 2 4; }
+  .bar { fill: var(--ink); }
+
+  /* tooltip */
+  .tooltip {
+    position: absolute;
+    background: var(--ink);
+    color: var(--paper);
+    padding: 8px 12px;
+    border-radius: 3px;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    line-height: 1.5;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.1s;
+    z-index: 10;
+    white-space: nowrap;
+    box-shadow: 0 4px 16px rgba(31,27,22,0.15);
+  }
+  .tooltip strong { color: #fff; font-weight: 600; }
+
+  /* ============================================================
+     ANSWERS SECTION
+     ============================================================ */
+  .answers {
+    margin-top: 16px;
+  }
+  .answer-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+  }
+  .answer-card {
+    background: var(--paper);
+    border: 1px solid var(--rule);
+    padding: 30px 32px 32px;
+    position: relative;
+  }
+  .answer-card .q-num {
+    font-family: var(--font-display);
+    font-weight: 400;
+    font-style: italic;
+    font-size: 48px;
+    color: var(--p50);
+    line-height: 1;
+    margin-bottom: 10px;
+    font-variation-settings: "opsz" 144;
+  }
+  .answer-card h3 {
+    font-family: var(--font-display);
+    font-weight: 500;
+    font-size: 20px;
+    color: var(--ink);
+    margin-bottom: 14px;
+    line-height: 1.3;
+    font-variation-settings: "opsz" 48;
+  }
+  .answer-card .a-body {
+    font-size: 14px;
+    color: var(--ink-2);
+    line-height: 1.6;
+    margin-bottom: 16px;
+  }
+  .answer-row {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 14px;
+    padding: 12px 0;
+    border-top: 1px solid var(--rule);
+    align-items: baseline;
+  }
+  .answer-row .a-pill {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: 0.15em;
+    font-weight: 600;
+    padding: 3px 8px;
+    border-radius: 999px;
+    text-transform: uppercase;
+  }
+  .answer-row.is-p50 .a-pill { background: var(--p50-soft); color: var(--p50); }
+  .answer-row.is-p85 .a-pill { background: var(--p85-soft); color: var(--p85); }
+  .answer-row.is-p95 .a-pill { background: var(--p95-soft); color: var(--p95); }
+  .answer-row.is-base .a-pill { background: var(--navy-soft); color: var(--navy); }
+
+  .answer-row .a-val {
+    font-family: var(--font-mono);
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--ink);
+  }
+  .answer-row .a-val span {
+    color: var(--ink-3);
+    font-weight: 400;
+    font-size: 12px;
+    margin-left: 8px;
+  }
+
+  /* ============================================================
+     FOOTER
+     ============================================================ */
+  footer {
+    margin-top: 80px;
+    padding-top: 24px;
+    border-top: 1px solid var(--rule-2);
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--ink-3);
+    letter-spacing: 0.05em;
+  }
+  footer .colophon {
+    font-family: var(--font-display);
+    font-style: italic;
+    font-size: 13px;
+    color: var(--ink-2);
+    letter-spacing: 0;
+  }
+
+  /* loading state */
+  .is-computing .panel-cta { opacity: 0.5; pointer-events: none; }
+
+  /* ============================================================
+     RESPONSIVE
+     ============================================================ */
+  @media (max-width: 1100px) {
+    .masthead { grid-template-columns: 1fr; gap: 32px; }
+    .results { grid-template-columns: repeat(2, 1fr); }
+    .grid-main { grid-template-columns: 1fr; }
+    .panel { position: static; }
+    .answer-grid { grid-template-columns: 1fr; }
+  }
+  @media (max-width: 640px) {
+    main { padding: 28px 16px 60px; }
+    .results { grid-template-columns: 1fr; }
+    .masthead h1 { font-size: 40px; }
+    .masthead .meta { grid-template-columns: 1fr; gap: 14px; }
+  }
+</style>
+</head>
+<body>
+
+<main>
+
+  <!-- ================ MASTHEAD ================ -->
+  <header class="masthead">
+    <div>
+      <div class="eyebrow">Monte Carlo · Symulacja probabilistyczna</div>
+      <h1>Prognoza ukończenia<br/><em>backlogu</em> produktu</h1>
+      <p class="lede">
+        Probabilistyczna prognoza oparta o historyczną przepustowość zespołu, ze świadomością scope creepu,
+        urlopów letnich i sezonowych obciążeń wsparciowych. Wszystkie parametry dostępne do dostrojenia po lewej.
+      </p>
+    </div>
+    <div class="meta">
+      <div class="meta-item">
+        <div class="label">Liczba symulacji</div>
+        <div class="value" id="m-runs">—</div>
+      </div>
+      <div class="meta-item">
+        <div class="label">Czas obliczeń</div>
+        <div class="value" id="m-time">—</div>
+      </div>
+      <div class="meta-item">
+        <div class="label">Start prac</div>
+        <div class="value" id="m-start">—</div>
+      </div>
+      <div class="meta-item">
+        <div class="label">Backlog wejściowy</div>
+        <div class="value" id="m-backlog">—</div>
+      </div>
+    </div>
+  </header>
+
+  <!-- ================ KEY RESULT CARDS ================ -->
+  <section class="section-head">
+    <div>
+      <div class="num">§ 01</div>
+      <h2>Kluczowe wyniki prognozy</h2>
+    </div>
+    <div class="right" id="last-updated">aktualizacja na żywo</div>
+  </section>
+
+  <section class="results">
+    <div class="result-card is-p50">
+      <span class="pill">P50 · prawdopodobne</span>
+      <div class="headline" id="card-p50-date">—</div>
+      <div class="sub" id="card-p50-sprints">— sprintów od startu</div>
+      <div class="delta">
+        Mediana scenariuszy — w połowie symulacji backlog kończy się <strong id="card-p50-delta">—</strong> wcześniej, w połowie później.
+      </div>
+    </div>
+
+    <div class="result-card is-p85">
+      <span class="pill">P85 · ostrożne</span>
+      <div class="headline" id="card-p85-date">—</div>
+      <div class="sub" id="card-p85-sprints">— sprintów od startu</div>
+      <div class="delta">
+        W <strong>85%</strong> symulacji zespół dostarcza całość najpóźniej do tej daty. Komitment zewnętrzny składaj tutaj.
+      </div>
+    </div>
+
+    <div class="result-card is-p95">
+      <span class="pill">P95 · konserwatywne</span>
+      <div class="headline" id="card-p95-date">—</div>
+      <div class="sub" id="card-p95-sprints">— sprintów od startu</div>
+      <div class="delta">
+        W <strong>95%</strong> przypadków zdążymy. Margines bezpieczeństwa do prezentacji wobec zarządu / klienta.
+      </div>
+    </div>
+
+    <div class="result-card is-sept">
+      <span class="pill">do 30.09.2026</span>
+      <div class="headline"><span id="card-sept-items">—</span><span style="font-family:var(--font-mono);font-size:14px;color:var(--ink-3);font-weight:500;"> elem.</span></div>
+      <div class="sub" id="card-sept-band">P85: — &nbsp;·&nbsp; P50: —</div>
+      <div class="delta">
+        Realistyczna liczba elementów do końca września przy uwzględnieniu urlopów i scope creepu.
+      </div>
+    </div>
+  </section>
+
+  <!-- ================ MAIN GRID ================ -->
+  <section class="section-head">
+    <div>
+      <div class="num">§ 02</div>
+      <h2>Parametry &amp; rozkład prognozy</h2>
+    </div>
+    <div class="right">parametry → rekalkulacja</div>
+  </section>
+
+  <div class="grid-main">
+
+    <!-- PARAMETERS PANEL -->
+    <aside class="panel" id="panel">
+      <h3>Parametry symulacji</h3>
+      <div class="panel-sub">edytuj wartości</div>
+
+      <div class="field">
+        <div class="field-label">
+          <span>Rozmiar backlogu</span>
+          <span class="field-value"><span id="v-backlog">62</span> elem.</span>
+        </div>
+        <input type="range" id="i-backlog" min="20" max="200" step="1" value="62">
+        <div class="field-helper">Historyjki + zadania techniczne na start.</div>
+      </div>
+
+      <div class="field">
+        <div class="field-label"><span>Data startu prac</span></div>
+        <input type="date" id="i-start" value="2026-07-01">
+      </div>
+
+      <div class="field">
+        <div class="field-label">
+          <span>Historyczna przepustowość</span>
+          <span class="field-value" style="font-size:11px;">śr <span id="v-thr-avg">—</span>/sprint</span>
+        </div>
+        <input type="text" id="i-throughput" value="5, 4, 4, 5, 6, 4, 2, 3, 2, 5, 6">
+        <div class="field-helper">Liczby elementów ukończonych w kolejnych sprintach (2 tygodnie). Wartości oddzielone przecinkami.</div>
+      </div>
+
+      <div class="panel-divider"></div>
+
+      <div class="field">
+        <div class="field-label">
+          <span>Scope creep (zakres)</span>
+          <span class="field-value" style="font-size:11px;"><span id="v-scope-min">20</span>–<span id="v-scope-max">30</span>%</span>
+        </div>
+        <div class="field-range-row">
+          <input type="range" id="i-scope-min" min="0" max="60" step="1" value="20">
+          <input type="range" id="i-scope-max" min="0" max="80" step="1" value="30">
+        </div>
+        <div class="field-helper">Procent nowych wymagań dochodzących w trakcie prac.</div>
+      </div>
+
+      <div class="panel-divider"></div>
+
+      <div class="field">
+        <div class="field-label">
+          <span>Wpływ urlopów (lip&ndash;sie)</span>
+          <span class="field-value is-p85">−<span id="v-vac">50</span>%</span>
+        </div>
+        <input type="range" id="i-vac" min="0" max="80" step="5" value="50">
+        <div class="field-helper">Redukcja przepustowości w okresie urlopowym.</div>
+      </div>
+
+      <div class="field">
+        <div class="field-label">
+          <span>Długość okresu urlopowego</span>
+          <span class="field-value"><span id="v-vac-sprints">4</span> sprinty</span>
+        </div>
+        <input type="range" id="i-vac-sprints" min="0" max="8" step="1" value="4">
+        <div class="field-helper">4 sprinty ≈ lipiec + sierpień.</div>
+      </div>
+
+      <div class="panel-divider"></div>
+
+      <div class="field">
+        <div class="field-label">
+          <span>Naprawy sezonowe (od wrz)</span>
+          <span class="field-value is-p95">−<span id="v-seasonal">25</span>%</span>
+        </div>
+        <input type="range" id="i-seasonal" min="0" max="60" step="5" value="25">
+        <div class="field-helper">Czas pochłaniany przez wsparcie produktów już wypuszczonych.</div>
+      </div>
+
+      <div class="field">
+        <div class="field-label">
+          <span>Start naprawy sezonowych</span>
+          <span class="field-value">sprint <span id="v-seasonal-from">5</span></span>
+        </div>
+        <input type="range" id="i-seasonal-from" min="1" max="20" step="1" value="5">
+        <div class="field-helper">5 sprintów ≈ ok. 1 września.</div>
+      </div>
+
+      <div class="panel-divider"></div>
+
+      <div class="field">
+        <div class="field-label">
+          <span>Liczba symulacji</span>
+          <span class="field-value"><span id="v-runs">10000</span></span>
+        </div>
+        <input type="range" id="i-runs" min="1000" max="50000" step="1000" value="10000">
+      </div>
+
+      <button class="panel-cta" id="btn-run">Przelicz symulację</button>
+      <button class="panel-cta is-secondary" id="btn-reset">Przywróć wartości startowe</button>
+    </aside>
+
+    <!-- CHARTS -->
+    <div class="chart-stack">
+
+      <!-- Histogram of completion dates -->
+      <div class="chart-card">
+        <div class="chart-head">
+          <div>
+            <div class="chart-title">Rozkład daty ukończenia całego backlogu</div>
+            <p class="chart-caption">Każdy słupek = liczba symulacji kończących się w danym sprincie. Pionowe linie oznaczają percentyle P50/P85/P95.</p>
+          </div>
+          <div class="chart-legend">
+            <span class="legend-item"><span class="legend-swatch line" style="color:var(--p50)"></span> P50</span>
+            <span class="legend-item"><span class="legend-swatch line" style="color:var(--p85)"></span> P85</span>
+            <span class="legend-item"><span class="legend-swatch line" style="color:var(--p95)"></span> P95</span>
+          </div>
+        </div>
+        <div class="svg-wrap"><svg id="hist-svg" viewBox="0 0 800 320" preserveAspectRatio="none" aria-label="Histogram daty ukończenia backlogu"></svg></div>
+      </div>
+
+      <!-- Cumulative probability -->
+      <div class="chart-card">
+        <div class="chart-head">
+          <div>
+            <div class="chart-title">Skumulowane prawdopodobieństwo ukończenia</div>
+            <p class="chart-caption">Krzywa S — w danej dacie z jakim prawdopodobieństwem backlog jest już ukończony. Tłem zaznaczone są pasma ufności.</p>
+          </div>
+          <div class="chart-legend">
+            <span class="legend-item"><span class="legend-swatch" style="background:var(--p50-soft)"></span> ≤ P50</span>
+            <span class="legend-item"><span class="legend-swatch" style="background:var(--p85-soft)"></span> ≤ P85</span>
+            <span class="legend-item"><span class="legend-swatch" style="background:var(--p95-soft)"></span> ≤ P95</span>
+          </div>
+        </div>
+        <div class="svg-wrap"><svg id="cdf-svg" viewBox="0 0 800 280" preserveAspectRatio="none" aria-label="Krzywa skumulowanego prawdopodobieństwa"></svg></div>
+      </div>
+
+      <!-- Fan chart: items completed over time -->
+      <div class="chart-card">
+        <div class="chart-head">
+          <div>
+            <div class="chart-title">Stożek niepewności — postęp w czasie</div>
+            <p class="chart-caption">Ile elementów backlogu zostanie ukończonych w kolejnych sprintach. Wstęgi prezentują pasma percentyli — zwężają się tam, gdzie konsensus symulacji jest największy.</p>
+          </div>
+          <div class="chart-legend">
+            <span class="legend-item"><span class="legend-swatch" style="background:var(--p95-soft)"></span> 5–95%</span>
+            <span class="legend-item"><span class="legend-swatch" style="background:var(--p85-soft)"></span> 15–85%</span>
+            <span class="legend-item"><span class="legend-swatch" style="background:var(--p50-soft)"></span> 25–75%</span>
+            <span class="legend-item"><span class="legend-swatch line" style="color:var(--ink)"></span> mediana</span>
+          </div>
+        </div>
+        <div class="svg-wrap"><svg id="fan-svg" viewBox="0 0 800 320" preserveAspectRatio="none" aria-label="Stożek niepewności postępu"></svg></div>
+      </div>
+
+      <!-- Items by Sept 30 distribution -->
+      <div class="chart-card">
+        <div class="chart-head">
+          <div>
+            <div class="chart-title">Liczba elementów ukończonych do 30 września 2026</div>
+            <p class="chart-caption">Histogram realistycznych scenariuszy dostarczenia do końca września — odpowiedź na drugie pytanie z briefu.</p>
+          </div>
+          <div class="chart-legend">
+            <span class="legend-item"><span class="legend-swatch" style="background:var(--navy)"></span> realistyczne (P50)</span>
+            <span class="legend-item"><span class="legend-swatch line" style="color:var(--p85)"></span> P85 (gwarantowane)</span>
+          </div>
+        </div>
+        <div class="svg-wrap"><svg id="sept-svg" viewBox="0 0 800 240" preserveAspectRatio="none" aria-label="Histogram elementów ukończonych do końca września"></svg></div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ================ ANSWERS ================ -->
+  <section class="section-head">
+    <div>
+      <div class="num">§ 03</div>
+      <h2>Odpowiedzi na pytania z briefu</h2>
+    </div>
+    <div class="right">wyniki w czasie rzeczywistym</div>
+  </section>
+
+  <section class="answers">
+    <div class="answer-grid">
+
+      <div class="answer-card">
+        <div class="q-num">01</div>
+        <h3>Jaką datę ukończenia wszystkich pozostałych elementów backlogu prognozujesz?</h3>
+        <p class="a-body">
+          Po włączeniu scope creepu (<span id="ans-scope">20–30%</span>), urlopów letnich
+          (<span id="ans-vac">−50% przez 4 sprinty</span>) oraz napraw sezonowych
+          od września (<span id="ans-seasonal">−25%</span>), prognoza wygląda następująco:
+        </p>
+        <div class="answer-row is-base">
+          <span class="a-pill">baza</span>
+          <span class="a-val" id="ans-base-date">— <span id="ans-base-sub">(bez modyfikatorów)</span></span>
+        </div>
+        <div class="answer-row is-p50">
+          <span class="a-pill">P50</span>
+          <span class="a-val" id="ans-q1-p50">— <span id="ans-q1-p50-sub">— sprintów</span></span>
+        </div>
+        <div class="answer-row is-p85">
+          <span class="a-pill">P85</span>
+          <span class="a-val" id="ans-q1-p85">— <span id="ans-q1-p85-sub">— sprintów</span></span>
+        </div>
+        <div class="answer-row is-p95">
+          <span class="a-pill">P95</span>
+          <span class="a-val" id="ans-q1-p95">— <span id="ans-q1-p95-sub">— sprintów</span></span>
+        </div>
+        <p class="a-body" style="margin-top:18px; padding-top:16px; border-top:1px dashed var(--rule); margin-bottom:0;">
+          <strong>Rekomendacja:</strong> <span id="ans-recommend">Wobec zarządu / klienta zobowiązuj się na datę <em>P85</em>; <em>P95</em> trzymaj jako wewnętrzny bufor.</span>
+        </p>
+      </div>
+
+      <div class="answer-card">
+        <div class="q-num">02</div>
+        <h3>Ile elementów zrealizujemy do końca września 2026?</h3>
+        <p class="a-body">
+          W okresie startowym (lipiec–wrzesień 2026, 6 dwutygodniowych sprintów) zespół działa
+          przy mocno zredukowanej mocy — pierwsze 4 sprinty objęte są urlopami,
+          a we wrześniu uruchamia się obciążenie naprawami sezonowymi.
+        </p>
+        <div class="answer-row is-p95">
+          <span class="a-pill">P95</span>
+          <span class="a-val" id="ans-q2-p95">— <span>(95% pewności, że dostarczymy ≥ tyle)</span></span>
+        </div>
+        <div class="answer-row is-p85">
+          <span class="a-pill">P85</span>
+          <span class="a-val" id="ans-q2-p85">— <span>(85% pewności)</span></span>
+        </div>
+        <div class="answer-row is-p50">
+          <span class="a-pill">P50</span>
+          <span class="a-val" id="ans-q2-p50">— <span>(scenariusz medialny)</span></span>
+        </div>
+        <div class="answer-row is-base">
+          <span class="a-pill">średnia</span>
+          <span class="a-val" id="ans-q2-avg">— <span>z wszystkich symulacji</span></span>
+        </div>
+        <p class="a-body" style="margin-top:18px; padding-top:16px; border-top:1px dashed var(--rule); margin-bottom:0;">
+          <strong>Realistyczna obietnica:</strong> <span id="ans-q2-text">— elementów do końca września przy 85% pewności.</span>
+        </p>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ================ FOOTER ================ -->
+  <footer>
+    <div>Monte Carlo Dashboard · <span id="foot-runs">10,000</span> symulacji · ostatnia kalkulacja: <span id="foot-time">—</span></div>
+    <div class="colophon">Wykonane dla planowania w warunkach niepewności.</div>
+  </footer>
+
+  <div class="tooltip" id="tooltip"></div>
+</main>
+
+<script>
+/* =============================================================
+   MONTE CARLO ENGINE
+   ============================================================= */
+
+const SPRINT_DAYS = 14;
+const SEPT_END = new Date('2026-09-30T23:59:59');
+
+/* ---- helpers ---- */
+const pad = n => String(n).padStart(2, '0');
+function formatDate(d) {
+  const months = ['stycznia','lutego','marca','kwietnia','maja','czerwca',
+                  'lipca','sierpnia','września','października','listopada','grudnia'];
+  return `${d.getDate()} ${months[d.getMonth()]} ${d.getFullYear()}`;
+}
+function formatDateShort(d) {
+  const months = ['sty','lut','mar','kwi','maj','cze','lip','sie','wrz','paź','lis','gru'];
+  return `${d.getDate()} ${months[d.getMonth()]} '${String(d.getFullYear()).slice(2)}`;
+}
+function formatNumber(n, decimals=0) {
+  return n.toFixed(decimals).replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+}
+function dateAfterSprints(startDate, sprintCount) {
+  const d = new Date(startDate);
+  d.setDate(d.getDate() + SPRINT_DAYS * sprintCount);
+  return d;
+}
+function percentile(arr, p) {
+  // arr should be sorted ascending
+  const idx = Math.min(arr.length - 1, Math.floor(p * arr.length));
+  return arr[idx];
+}
+function avg(arr) {
+  return arr.reduce((a,b)=>a+b, 0) / arr.length;
+}
+
+/* ---- read params from DOM ---- */
+function readParams() {
+  const throughputRaw = document.getElementById('i-throughput').value;
+  const throughput = throughputRaw.split(/[,\s]+/).map(s => parseFloat(s)).filter(n => !isNaN(n) && n >= 0);
+  return {
+    backlog:         parseInt(document.getElementById('i-backlog').value, 10),
+    startDate:       new Date(document.getElementById('i-start').value + 'T00:00:00'),
+    throughput:      throughput.length ? throughput : [4],
+    scopeMin:        parseFloat(document.getElementById('i-scope-min').value) / 100,
+    scopeMax:        parseFloat(document.getElementById('i-scope-max').value) / 100,
+    vacFactor:       1 - parseFloat(document.getElementById('i-vac').value) / 100,
+    vacSprints:      parseInt(document.getElementById('i-vac-sprints').value, 10),
+    seasonalFactor:  1 - parseFloat(document.getElementById('i-seasonal').value) / 100,
+    seasonalFrom:    parseInt(document.getElementById('i-seasonal-from').value, 10),
+    runs:            parseInt(document.getElementById('i-runs').value, 10),
+  };
+}
+
+/* ---- single simulation: returns sprints to complete + per-sprint cumulative ---- */
+function simulateOnce(p, captureTrace=false, maxSprints=80) {
+  const scope = 1 + p.scopeMin + Math.random() * (p.scopeMax - p.scopeMin);
+  const total = p.backlog * scope;
+  let done = 0;
+  let sprint = 0;
+  const trace = captureTrace ? [0] : null;
+  while (done < total && sprint < maxSprints) {
+    let base = p.throughput[Math.floor(Math.random() * p.throughput.length)];
+    if (sprint < p.vacSprints) base = base * p.vacFactor;
+    if (sprint >= p.seasonalFrom - 1) base = base * p.seasonalFactor;
+    done += base;
+    sprint += 1;
+    if (captureTrace) trace.push(done);
+  }
+  return { sprints: sprint, total, finalDone: done, trace };
+}
+
+/* ---- full Monte Carlo run ---- */
+function runMonteCarlo(p) {
+  const t0 = performance.now();
+  const sprints = [];
+  // we need traces only for the fan chart - sample a subset for memory efficiency
+  const traceSampleN = Math.min(500, p.runs);
+  const traces = new Array(traceSampleN);
+  const maxSprints = 80;
+
+  // For "items by Sept 30" we need to know how many sprints fit in [start, sept30]
+  const daysToSept = Math.floor((SEPT_END - p.startDate) / 86400000);
+  const sprintsInSept = Math.max(0, Math.floor(daysToSept / SPRINT_DAYS));
+
+  const itemsBySept = [];
+
+  for (let i = 0; i < p.runs; i++) {
+    const capture = i < traceSampleN;
+    const r = simulateOnce(p, capture, maxSprints);
+    sprints.push(r.sprints);
+    if (capture) traces[i] = r.trace;
+
+    // Items by Sept 30 = min(done_at_sprintsInSept, total)
+    // We need a separate quick sim to count items, but for efficiency reuse: if captured, we have it.
+    // For non-captured we need a quick recompute - but it's expensive. Instead let's compute items by sept inside simulateOnce too.
+    if (capture) {
+      const itemsAtSept = r.trace[Math.min(sprintsInSept, r.trace.length - 1)];
+      itemsBySept.push(Math.min(itemsAtSept, r.total));
+    }
+  }
+
+  // For itemsBySept across all runs, do a lightweight specialized loop
+  itemsBySept.length = 0;
+  for (let i = 0; i < p.runs; i++) {
+    const scope = 1 + p.scopeMin + Math.random() * (p.scopeMax - p.scopeMin);
+    const total = p.backlog * scope;
+    let done = 0;
+    for (let s = 0; s < sprintsInSept && done < total; s++) {
+      let base = p.throughput[Math.floor(Math.random() * p.throughput.length)];
+      if (s < p.vacSprints) base *= p.vacFactor;
+      if (s >= p.seasonalFrom - 1) base *= p.seasonalFactor;
+      done += base;
+    }
+    itemsBySept.push(Math.min(done, total));
+  }
+
+  sprints.sort((a,b)=>a-b);
+  itemsBySept.sort((a,b)=>a-b);
+
+  const result = {
+    sprints,
+    itemsBySept,
+    traces,
+    sprintsInSept,
+    p50: percentile(sprints, 0.50),
+    p85: percentile(sprints, 0.85),
+    p95: percentile(sprints, 0.95),
+    pMin: sprints[0],
+    pMax: sprints[sprints.length-1],
+    avg: avg(sprints),
+    itemsP50: itemsBySept[Math.floor(itemsBySept.length * 0.5)],
+    // for "we deliver ≥ X with 85% probability" => we want the 15th percentile (lower tail)
+    itemsP85: itemsBySept[Math.floor(itemsBySept.length * 0.15)],
+    itemsP95: itemsBySept[Math.floor(itemsBySept.length * 0.05)],
+    itemsAvg: avg(itemsBySept),
+    itemsMax: itemsBySept[itemsBySept.length - 1],
+    timeMs: performance.now() - t0,
+  };
+
+  // Also compute baseline (no modifiers)
+  const baseline = { sprints: [] };
+  for (let i = 0; i < Math.min(5000, p.runs); i++) {
+    let done = 0; let sprint = 0;
+    while (done < p.backlog && sprint < maxSprints) {
+      done += p.throughput[Math.floor(Math.random() * p.throughput.length)];
+      sprint++;
+    }
+    baseline.sprints.push(sprint);
+  }
+  baseline.sprints.sort((a,b)=>a-b);
+  baseline.p50 = percentile(baseline.sprints, 0.5);
+  baseline.p85 = percentile(baseline.sprints, 0.85);
+  result.baseline = baseline;
+
+  return result;
+}
+
+/* =============================================================
+   SVG CHART RENDERERS
+   ============================================================= */
+
+const tooltipEl = document.getElementById('tooltip');
+function showTip(html, evt) {
+  tooltipEl.innerHTML = html;
+  tooltipEl.style.opacity = '1';
+  positionTip(evt);
+}
+function positionTip(evt) {
+  const x = evt.clientX + 14;
+  const y = evt.clientY - 8;
+  tooltipEl.style.left = x + 'px';
+  tooltipEl.style.top  = y + 'px';
+}
+function hideTip() { tooltipEl.style.opacity = '0'; }
+
+function clearSvg(svg) {
+  while (svg.firstChild) svg.removeChild(svg.firstChild);
+}
+function ns(tag, attrs={}) {
+  const el = document.createElementNS('http://www.w3.org/2000/svg', tag);
+  for (const k in attrs) el.setAttribute(k, attrs[k]);
+  return el;
+}
+
+/* ---- Histogram of completion sprints ---- */
+function renderHistogram(svg, sprints, p, percentiles) {
+  clearSvg(svg);
+  const W = 800, H = 320;
+  const margin = { top: 24, right: 24, bottom: 60, left: 56 };
+  const innerW = W - margin.left - margin.right;
+  const innerH = H - margin.top - margin.bottom;
+
+  const min = sprints[0];
+  const max = sprints[sprints.length - 1];
+  const range = Math.max(1, max - min + 1);
+  // bin per sprint
+  const bins = new Array(range).fill(0);
+  for (const s of sprints) bins[s - min]++;
+  const maxCount = Math.max(...bins);
+  const barW = innerW / range;
+
+  const g = ns('g', { transform: `translate(${margin.left},${margin.top})` });
+
+  // grid lines (count)
+  const yTicks = 4;
+  for (let i = 0; i <= yTicks; i++) {
+    const y = innerH - (i / yTicks) * innerH;
+    const val = Math.round((i / yTicks) * maxCount);
+    g.appendChild(ns('line', { x1: 0, y1: y, x2: innerW, y2: y, class: 'grid-line' }));
+    const t = ns('text', { x: -8, y: y + 4, 'text-anchor': 'end', class: 'axis-label' });
+    t.textContent = formatNumber(val);
+    g.appendChild(t);
+  }
+
+  // bars
+  bins.forEach((count, i) => {
+    const h = (count / maxCount) * innerH;
+    const x = i * barW;
+    const sprintNum = min + i;
+    const dateStr = formatDateShort(dateAfterSprints(p.startDate, sprintNum));
+    const rect = ns('rect', {
+      x: x + 1,
+      y: innerH - h,
+      width: Math.max(1, barW - 2),
+      height: h,
+      fill: 'var(--ink)',
+      opacity: 0.82,
+    });
+    rect.addEventListener('mouseenter', e => {
+      rect.setAttribute('opacity', '1');
+      showTip(`<strong>Sprint ${sprintNum}</strong> · ${dateStr}<br>${count} symulacji <span style="color:#ccc">(${(count/sprints.length*100).toFixed(1)}%)</span>`, e);
+    });
+    rect.addEventListener('mousemove', positionTip);
+    rect.addEventListener('mouseleave', () => { rect.setAttribute('opacity', '0.82'); hideTip(); });
+    g.appendChild(rect);
+  });
+
+  // x-axis labels (every Nth sprint)
+  const xStep = Math.max(1, Math.ceil(range / 8));
+  for (let i = 0; i < range; i += xStep) {
+    const sprintNum = min + i;
+    const date = dateAfterSprints(p.startDate, sprintNum);
+    const x = i * barW + barW / 2;
+    const t1 = ns('text', { x, y: innerH + 18, 'text-anchor': 'middle', class: 'axis-label' });
+    t1.textContent = `s${sprintNum}`;
+    g.appendChild(t1);
+    const t2 = ns('text', { x, y: innerH + 34, 'text-anchor': 'middle', class: 'axis-label' });
+    t2.textContent = formatDateShort(date);
+    t2.setAttribute('font-size', '10');
+    g.appendChild(t2);
+  }
+
+  // percentile lines
+  const linesData = [
+    { value: percentiles.p50, color: 'var(--p50)', label: 'P50' },
+    { value: percentiles.p85, color: 'var(--p85)', label: 'P85' },
+    { value: percentiles.p95, color: 'var(--p95)', label: 'P95' },
+  ];
+  linesData.forEach(d => {
+    const x = (d.value - min + 0.5) * barW;
+    g.appendChild(ns('line', {
+      x1: x, y1: 0, x2: x, y2: innerH,
+      stroke: d.color, 'stroke-width': 2, 'stroke-dasharray': '4 4'
+    }));
+    const lbl = ns('text', { x: x + 4, y: 14, class: 'axis-label', fill: d.color });
+    lbl.setAttribute('font-weight', '600');
+    lbl.textContent = `${d.label} · s${d.value} · ${formatDateShort(dateAfterSprints(p.startDate, d.value))}`;
+    g.appendChild(lbl);
+  });
+
+  // axis title
+  const axisTitle = ns('text', { x: innerW / 2, y: innerH + 54, 'text-anchor': 'middle', class: 'axis-label' });
+  axisTitle.setAttribute('font-weight', '600');
+  axisTitle.textContent = 'Sprint zakończenia backlogu';
+  g.appendChild(axisTitle);
+
+  const yTitle = ns('text', { class: 'axis-label' });
+  yTitle.setAttribute('transform', `translate(-44, ${innerH/2}) rotate(-90)`);
+  yTitle.setAttribute('text-anchor', 'middle');
+  yTitle.setAttribute('font-weight', '600');
+  yTitle.textContent = 'Liczba symulacji';
+  g.appendChild(yTitle);
+
+  svg.appendChild(g);
+}
+
+/* ---- CDF chart ---- */
+function renderCDF(svg, sprints, p, percentiles) {
+  clearSvg(svg);
+  const W = 800, H = 280;
+  const margin = { top: 20, right: 24, bottom: 56, left: 56 };
+  const innerW = W - margin.left - margin.right;
+  const innerH = H - margin.top - margin.bottom;
+
+  const min = sprints[0];
+  const max = sprints[sprints.length - 1];
+  const range = Math.max(1, max - min);
+
+  // build CDF
+  const n = sprints.length;
+  // unique sprint values
+  const points = [];
+  let i = 0;
+  while (i < n) {
+    const v = sprints[i];
+    let j = i;
+    while (j < n && sprints[j] === v) j++;
+    points.push({ x: v, cdf: j / n });
+    i = j;
+  }
+
+  const x = v => ((v - min) / range) * innerW;
+  const y = c => innerH - c * innerH;
+
+  const g = ns('g', { transform: `translate(${margin.left},${margin.top})` });
+
+  // background bands
+  // ≤ P50 band (0 to P50)
+  const p50x = x(percentiles.p50);
+  const p85x = x(percentiles.p85);
+  const p95x = x(percentiles.p95);
+  g.appendChild(ns('rect', { x: 0, y: 0, width: p50x, height: innerH, fill: 'var(--p50-soft)', opacity: 0.55 }));
+  g.appendChild(ns('rect', { x: p50x, y: 0, width: p85x - p50x, height: innerH, fill: 'var(--p85-soft)', opacity: 0.55 }));
+  g.appendChild(ns('rect', { x: p85x, y: 0, width: p95x - p85x, height: innerH, fill: 'var(--p95-soft)', opacity: 0.55 }));
+
+  // grid
+  for (let i = 0; i <= 4; i++) {
+    const yc = (i / 4) * innerH;
+    g.appendChild(ns('line', { x1: 0, y1: yc, x2: innerW, y2: yc, class: 'grid-line' }));
+    const t = ns('text', { x: -8, y: yc + 4, 'text-anchor': 'end', class: 'axis-label' });
+    t.textContent = `${(100 - i*25)}%`;
+    g.appendChild(t);
+  }
+
+  // path
+  let d = `M 0 ${y(0)} `;
+  for (const pt of points) d += `L ${x(pt.x)} ${y(pt.cdf)} `;
+  d += `L ${innerW} ${y(1)}`;
+  const path = ns('path', { d, fill: 'none', stroke: 'var(--ink)', 'stroke-width': 2.2 });
+  g.appendChild(path);
+
+  // percentile markers
+  [
+    { p: 0.50, x: p50x, color: 'var(--p50)', label: 'P50' },
+    { p: 0.85, x: p85x, color: 'var(--p85)', label: 'P85' },
+    { p: 0.95, x: p95x, color: 'var(--p95)', label: 'P95' },
+  ].forEach(d => {
+    g.appendChild(ns('line', { x1: d.x, y1: 0, x2: d.x, y2: innerH, stroke: d.color, 'stroke-width': 1.5, 'stroke-dasharray': '3 3' }));
+    g.appendChild(ns('circle', { cx: d.x, cy: y(d.p), r: 5, fill: d.color, stroke: 'var(--paper)', 'stroke-width': 2 }));
+    const lbl = ns('text', { x: d.x + 6, y: y(d.p) - 8, class: 'axis-label', fill: d.color });
+    lbl.setAttribute('font-weight', '600');
+    lbl.textContent = `${d.label}`;
+    g.appendChild(lbl);
+  });
+
+  // x ticks (sprints)
+  const xStep = Math.max(1, Math.ceil(range / 8));
+  for (let v = min; v <= max; v += xStep) {
+    const xx = x(v);
+    const date = dateAfterSprints(p.startDate, v);
+    const t1 = ns('text', { x: xx, y: innerH + 18, 'text-anchor': 'middle', class: 'axis-label' });
+    t1.textContent = `s${v}`;
+    g.appendChild(t1);
+    const t2 = ns('text', { x: xx, y: innerH + 32, 'text-anchor': 'middle', class: 'axis-label' });
+    t2.textContent = formatDateShort(date);
+    t2.setAttribute('font-size', '10');
+    g.appendChild(t2);
+  }
+
+  // axis titles
+  const yTitle = ns('text', { class: 'axis-label' });
+  yTitle.setAttribute('transform', `translate(-42, ${innerH/2}) rotate(-90)`);
+  yTitle.setAttribute('text-anchor', 'middle');
+  yTitle.setAttribute('font-weight', '600');
+  yTitle.textContent = 'P (ukończenia ≤ data)';
+  g.appendChild(yTitle);
+
+  // Hover crosshair
+  const crosshair = ns('line', { x1: 0, y1: 0, x2: 0, y2: innerH, stroke: 'var(--ink)', 'stroke-width': 1, 'stroke-dasharray': '2 3', opacity: 0 });
+  g.appendChild(crosshair);
+  const hitArea = ns('rect', { x: 0, y: 0, width: innerW, height: innerH, fill: 'transparent' });
+  hitArea.addEventListener('mousemove', e => {
+    const rect = svg.getBoundingClientRect();
+    const scale = rect.width / W;
+    const px = (e.clientX - rect.left) / scale - margin.left;
+    if (px < 0 || px > innerW) return;
+    const v = Math.round(min + (px / innerW) * range);
+    // find CDF value at v
+    let cdfVal = 0;
+    for (const pt of points) {
+      if (pt.x <= v) cdfVal = pt.cdf; else break;
+    }
+    crosshair.setAttribute('x1', x(v));
+    crosshair.setAttribute('x2', x(v));
+    crosshair.setAttribute('opacity', '0.4');
+    const date = dateAfterSprints(p.startDate, v);
+    showTip(`<strong>Sprint ${v}</strong> · ${formatDateShort(date)}<br>P(ukończ. ≤ tej daty): <strong>${(cdfVal*100).toFixed(1)}%</strong>`, e);
+  });
+  hitArea.addEventListener('mouseleave', () => { crosshair.setAttribute('opacity', '0'); hideTip(); });
+  g.appendChild(hitArea);
+
+  svg.appendChild(g);
+}
+
+/* ---- Fan chart of completion progress over time ---- */
+function renderFan(svg, traces, p, percentiles) {
+  clearSvg(svg);
+  const W = 800, H = 320;
+  const margin = { top: 20, right: 24, bottom: 56, left: 56 };
+  const innerW = W - margin.left - margin.right;
+  const innerH = H - margin.top - margin.bottom;
+
+  // Determine sprint range to plot (up to P95)
+  const maxSprint = percentiles.p95 + 1;
+  // For each sprint up to maxSprint, gather completed-counts across traces
+  const perSprint = new Array(maxSprint + 1).fill(null).map(() => []);
+  for (const tr of traces) {
+    if (!tr) continue;
+    for (let s = 0; s <= maxSprint; s++) {
+      const v = s < tr.length ? tr[s] : tr[tr.length - 1]; // hold at final
+      perSprint[s].push(v);
+    }
+  }
+  // sort each
+  perSprint.forEach(arr => arr.sort((a,b)=>a-b));
+
+  // determine y scale - max value
+  const maxY = perSprint[maxSprint].length ? perSprint[maxSprint][perSprint[maxSprint].length-1] : p.backlog * 1.3;
+
+  const x = s => (s / maxSprint) * innerW;
+  const y = v => innerH - (v / maxY) * innerH;
+
+  const g = ns('g', { transform: `translate(${margin.left},${margin.top})` });
+
+  // grid
+  const yTicks = 5;
+  for (let i = 0; i <= yTicks; i++) {
+    const yc = (i / yTicks) * innerH;
+    const val = maxY * (1 - i/yTicks);
+    g.appendChild(ns('line', { x1: 0, y1: yc, x2: innerW, y2: yc, class: 'grid-line' }));
+    const t = ns('text', { x: -8, y: yc + 4, 'text-anchor': 'end', class: 'axis-label' });
+    t.textContent = Math.round(val);
+    g.appendChild(t);
+  }
+
+  // Helper to build a band polygon between two percentile arrays
+  function buildBand(loP, hiP) {
+    let dTop = '', dBot = '';
+    for (let s = 0; s <= maxSprint; s++) {
+      const arr = perSprint[s];
+      if (!arr.length) continue;
+      const lo = arr[Math.floor(loP * arr.length)] || 0;
+      const hi = arr[Math.min(arr.length - 1, Math.floor(hiP * arr.length))] || 0;
+      dTop += `${s === 0 ? 'M' : 'L'} ${x(s)} ${y(hi)} `;
+      dBot = `L ${x(s)} ${y(lo)} ` + dBot;
+    }
+    return dTop + dBot + 'Z';
+  }
+
+  // Bands from outer to inner
+  g.appendChild(ns('path', { d: buildBand(0.05, 0.95), fill: 'var(--p95-soft)', opacity: 0.75 }));
+  g.appendChild(ns('path', { d: buildBand(0.15, 0.85), fill: 'var(--p85-soft)', opacity: 0.85 }));
+  g.appendChild(ns('path', { d: buildBand(0.25, 0.75), fill: 'var(--p50-soft)', opacity: 0.85 }));
+
+  // Median line
+  let medianD = '';
+  for (let s = 0; s <= maxSprint; s++) {
+    const arr = perSprint[s];
+    if (!arr.length) continue;
+    const med = arr[Math.floor(0.5 * arr.length)] || 0;
+    medianD += `${s === 0 ? 'M' : 'L'} ${x(s)} ${y(med)} `;
+  }
+  g.appendChild(ns('path', { d: medianD, fill: 'none', stroke: 'var(--ink)', 'stroke-width': 2 }));
+
+  // Target line at backlog * mid-scope
+  const targetMid = p.backlog * (1 + (p.scopeMin + p.scopeMax) / 2);
+  g.appendChild(ns('line', {
+    x1: 0, y1: y(targetMid), x2: innerW, y2: y(targetMid),
+    stroke: 'var(--p95)', 'stroke-width': 1.5, 'stroke-dasharray': '6 4'
+  }));
+  const targetLbl = ns('text', { x: innerW - 6, y: y(targetMid) - 6, 'text-anchor': 'end', class: 'axis-label', fill: 'var(--p95)' });
+  targetLbl.setAttribute('font-weight', '600');
+  targetLbl.textContent = `cel: ${targetMid.toFixed(0)} elem. (backlog + scope creep)`;
+  g.appendChild(targetLbl);
+
+  // Sept 30 marker vertical line
+  const daysToSept = (SEPT_END - p.startDate) / 86400000;
+  const sprintsToSept = daysToSept / SPRINT_DAYS;
+  if (sprintsToSept >= 0 && sprintsToSept <= maxSprint) {
+    const xs = x(sprintsToSept);
+    g.appendChild(ns('line', { x1: xs, y1: 0, x2: xs, y2: innerH, stroke: 'var(--navy)', 'stroke-width': 1.5, 'stroke-dasharray': '4 4' }));
+    const lbl = ns('text', { x: xs + 4, y: 14, class: 'axis-label', fill: 'var(--navy)' });
+    lbl.setAttribute('font-weight', '600');
+    lbl.textContent = '30 wrz 2026';
+    g.appendChild(lbl);
+  }
+
+  // x ticks
+  const xStep = Math.max(1, Math.ceil(maxSprint / 8));
+  for (let s = 0; s <= maxSprint; s += xStep) {
+    const xx = x(s);
+    const date = dateAfterSprints(p.startDate, s);
+    const t1 = ns('text', { x: xx, y: innerH + 18, 'text-anchor': 'middle', class: 'axis-label' });
+    t1.textContent = `s${s}`;
+    g.appendChild(t1);
+    const t2 = ns('text', { x: xx, y: innerH + 32, 'text-anchor': 'middle', class: 'axis-label' });
+    t2.textContent = formatDateShort(date);
+    t2.setAttribute('font-size', '10');
+    g.appendChild(t2);
+  }
+
+  const yTitle = ns('text', { class: 'axis-label' });
+  yTitle.setAttribute('transform', `translate(-42, ${innerH/2}) rotate(-90)`);
+  yTitle.setAttribute('text-anchor', 'middle');
+  yTitle.setAttribute('font-weight', '600');
+  yTitle.textContent = 'Elementy ukończone';
+  g.appendChild(yTitle);
+
+  // Crosshair tooltip
+  const hitArea = ns('rect', { x: 0, y: 0, width: innerW, height: innerH, fill: 'transparent' });
+  hitArea.addEventListener('mousemove', e => {
+    const rect = svg.getBoundingClientRect();
+    const scale = rect.width / W;
+    const px = (e.clientX - rect.left) / scale - margin.left;
+    if (px < 0 || px > innerW) return;
+    const s = Math.round((px / innerW) * maxSprint);
+    const arr = perSprint[s];
+    if (!arr || !arr.length) return;
+    const med = arr[Math.floor(0.5 * arr.length)] || 0;
+    const lo = arr[Math.floor(0.15 * arr.length)] || 0;
+    const hi = arr[Math.floor(0.85 * arr.length)] || 0;
+    const date = dateAfterSprints(p.startDate, s);
+    showTip(`<strong>Sprint ${s}</strong> · ${formatDateShort(date)}<br>Mediana: <strong>${med.toFixed(1)}</strong><br>P15–P85: ${lo.toFixed(1)} – ${hi.toFixed(1)}`, e);
+  });
+  hitArea.addEventListener('mouseleave', hideTip);
+  g.appendChild(hitArea);
+
+  svg.appendChild(g);
+}
+
+/* ---- Sept 30 distribution ---- */
+function renderSept(svg, itemsBySept, percentiles) {
+  clearSvg(svg);
+  const W = 800, H = 240;
+  const margin = { top: 24, right: 24, bottom: 50, left: 56 };
+  const innerW = W - margin.left - margin.right;
+  const innerH = H - margin.top - margin.bottom;
+
+  const min = Math.floor(itemsBySept[0]);
+  const max = Math.ceil(itemsBySept[itemsBySept.length - 1]);
+  const binCount = Math.min(30, Math.max(6, max - min + 1));
+  const binSize = (max - min) / binCount || 1;
+  const bins = new Array(binCount).fill(0);
+  for (const v of itemsBySept) {
+    const idx = Math.min(binCount - 1, Math.floor((v - min) / binSize));
+    bins[idx]++;
+  }
+  const maxCount = Math.max(...bins);
+  const barW = innerW / binCount;
+
+  const g = ns('g', { transform: `translate(${margin.left},${margin.top})` });
+
+  // grid
+  for (let i = 0; i <= 4; i++) {
+    const yc = (i / 4) * innerH;
+    const val = Math.round((1 - i/4) * maxCount);
+    g.appendChild(ns('line', { x1: 0, y1: yc, x2: innerW, y2: yc, class: 'grid-line' }));
+    const t = ns('text', { x: -8, y: yc + 4, 'text-anchor': 'end', class: 'axis-label' });
+    t.textContent = formatNumber(val);
+    g.appendChild(t);
+  }
+
+  const itemsP50 = percentiles.itemsP50;
+  const itemsP85 = percentiles.itemsP85;
+
+  bins.forEach((c, i) => {
+    const h = (c / maxCount) * innerH;
+    const x = i * barW;
+    const binLow = min + i * binSize;
+    const binHigh = min + (i+1) * binSize;
+    const binCenter = (binLow + binHigh) / 2;
+    // color: blue if at or above P85, lighter if below
+    const colored = binCenter >= itemsP85 - binSize/2;
+    const rect = ns('rect', {
+      x: x + 1, y: innerH - h,
+      width: Math.max(1, barW - 2), height: h,
+      fill: colored ? 'var(--navy)' : 'var(--navy-soft)',
+      opacity: colored ? 0.85 : 0.85,
+    });
+    rect.addEventListener('mouseenter', e => {
+      rect.setAttribute('opacity', '1');
+      showTip(`<strong>${binLow.toFixed(1)}–${binHigh.toFixed(1)} elem.</strong><br>${c} symulacji (${(c/itemsBySept.length*100).toFixed(1)}%)`, e);
+    });
+    rect.addEventListener('mousemove', positionTip);
+    rect.addEventListener('mouseleave', () => { rect.setAttribute('opacity', '0.85'); hideTip(); });
+    g.appendChild(rect);
+  });
+
+  // x ticks
+  const ticks = 6;
+  for (let i = 0; i <= ticks; i++) {
+    const val = min + (i/ticks) * (max - min);
+    const xx = (i/ticks) * innerW;
+    const t = ns('text', { x: xx, y: innerH + 18, 'text-anchor': 'middle', class: 'axis-label' });
+    t.textContent = val.toFixed(0);
+    g.appendChild(t);
+  }
+
+  // P85 line
+  const p85x = ((itemsP85 - min) / (max - min)) * innerW;
+  g.appendChild(ns('line', {
+    x1: p85x, y1: 0, x2: p85x, y2: innerH,
+    stroke: 'var(--p85)', 'stroke-width': 2, 'stroke-dasharray': '4 4'
+  }));
+  const p85lbl = ns('text', { x: p85x + 4, y: 14, class: 'axis-label', fill: 'var(--p85)' });
+  p85lbl.setAttribute('font-weight', '600');
+  p85lbl.textContent = `P85: ${itemsP85.toFixed(1)} elem.`;
+  g.appendChild(p85lbl);
+
+  // P50 marker
+  const p50x = ((itemsP50 - min) / (max - min)) * innerW;
+  g.appendChild(ns('line', {
+    x1: p50x, y1: 0, x2: p50x, y2: innerH,
+    stroke: 'var(--p50)', 'stroke-width': 2, 'stroke-dasharray': '4 4'
+  }));
+  const p50lbl = ns('text', { x: p50x + 4, y: 28, class: 'axis-label', fill: 'var(--p50)' });
+  p50lbl.setAttribute('font-weight', '600');
+  p50lbl.textContent = `P50: ${itemsP50.toFixed(1)}`;
+  g.appendChild(p50lbl);
+
+  const axisTitle = ns('text', { x: innerW / 2, y: innerH + 40, 'text-anchor': 'middle', class: 'axis-label' });
+  axisTitle.setAttribute('font-weight', '600');
+  axisTitle.textContent = 'Elementy ukończone do 30 września 2026';
+  g.appendChild(axisTitle);
+
+  svg.appendChild(g);
+}
+
+/* =============================================================
+   ORCHESTRATION
+   ============================================================= */
+
+function updateUI(result, p) {
+  // throughput average
+  const thrAvg = avg(p.throughput);
+  document.getElementById('v-thr-avg').textContent = thrAvg.toFixed(1);
+
+  // header meta
+  document.getElementById('m-runs').textContent = formatNumber(p.runs);
+  document.getElementById('m-time').textContent = `${(result.timeMs).toFixed(0)} ms`;
+  document.getElementById('m-start').textContent = formatDateShort(p.startDate);
+  document.getElementById('m-backlog').textContent = `${p.backlog} elem.`;
+
+  // result cards
+  const p50Date = dateAfterSprints(p.startDate, result.p50);
+  const p85Date = dateAfterSprints(p.startDate, result.p85);
+  const p95Date = dateAfterSprints(p.startDate, result.p95);
+  document.getElementById('card-p50-date').textContent = formatDate(p50Date);
+  document.getElementById('card-p85-date').textContent = formatDate(p85Date);
+  document.getElementById('card-p95-date').textContent = formatDate(p95Date);
+  document.getElementById('card-p50-sprints').textContent = `${result.p50} sprintów od startu (avg ${result.avg.toFixed(1)})`;
+  document.getElementById('card-p85-sprints').textContent = `${result.p85} sprintów od startu`;
+  document.getElementById('card-p95-sprints').textContent = `${result.p95} sprintów od startu`;
+
+  const deltaP85vsP50 = ((p85Date - p50Date) / 86400000 / 7).toFixed(0);
+  document.getElementById('card-p50-delta').textContent = `± ${(result.sprints[Math.floor(result.sprints.length*0.75)] - result.p50)} sprintów`;
+
+  document.getElementById('card-sept-items').textContent = result.itemsP50.toFixed(0);
+  document.getElementById('card-sept-band').textContent = `P85: ${result.itemsP85.toFixed(1)} elem.  ·  P50: ${result.itemsP50.toFixed(1)} elem.`;
+
+  // render charts
+  renderHistogram(document.getElementById('hist-svg'), result.sprints, p, result);
+  renderCDF(document.getElementById('cdf-svg'), result.sprints, p, result);
+  renderFan(document.getElementById('fan-svg'), result.traces, p, result);
+  renderSept(document.getElementById('sept-svg'), result.itemsBySept, result);
+
+  // answers
+  document.getElementById('ans-scope').textContent = `${(p.scopeMin*100).toFixed(0)}–${(p.scopeMax*100).toFixed(0)}%`;
+  document.getElementById('ans-vac').textContent = `−${((1-p.vacFactor)*100).toFixed(0)}% przez ${p.vacSprints} sprinty`;
+  document.getElementById('ans-seasonal').textContent = `−${((1-p.seasonalFactor)*100).toFixed(0)}% od sprintu ${p.seasonalFrom}`;
+
+  const baseDate = dateAfterSprints(p.startDate, result.baseline.p50);
+  document.getElementById('ans-base-date').innerHTML = `${formatDate(baseDate)} <span style="color:var(--ink-3);font-weight:400;font-size:12px;margin-left:8px;">${result.baseline.p50} sprintów · bez scope, urlopów, napraw</span>`;
+
+  document.getElementById('ans-q1-p50').innerHTML = `${formatDate(p50Date)} <span style="color:var(--ink-3);font-weight:400;font-size:12px;margin-left:8px;">${result.p50} sprintów</span>`;
+  document.getElementById('ans-q1-p85').innerHTML = `${formatDate(p85Date)} <span style="color:var(--ink-3);font-weight:400;font-size:12px;margin-left:8px;">${result.p85} sprintów</span>`;
+  document.getElementById('ans-q1-p95').innerHTML = `${formatDate(p95Date)} <span style="color:var(--ink-3);font-weight:400;font-size:12px;margin-left:8px;">${result.p95} sprintów</span>`;
+
+  document.getElementById('ans-recommend').innerHTML = `Wobec zarządu / klienta zobowiązuj się na datę <strong style="color:var(--p85);">${formatDate(p85Date)}</strong> (P85); <strong style="color:var(--p95);">${formatDate(p95Date)}</strong> (P95) trzymaj jako wewnętrzny bufor bezpieczeństwa. Mediana <strong style="color:var(--p50);">${formatDate(p50Date)}</strong> jest scenariuszem optymistycznym — komitment na nią jest ryzykowny.`;
+
+  document.getElementById('ans-q2-p95').innerHTML = `${result.itemsP95.toFixed(0)} elem. <span>(95% pewności, że dostarczymy ≥ tyle)</span>`;
+  document.getElementById('ans-q2-p85').innerHTML = `${result.itemsP85.toFixed(0)} elem. <span>(85% pewności)</span>`;
+  document.getElementById('ans-q2-p50').innerHTML = `${result.itemsP50.toFixed(0)} elem. <span>(scenariusz medialny)</span>`;
+  document.getElementById('ans-q2-avg').innerHTML = `${result.itemsAvg.toFixed(1)} elem. <span>z ${formatNumber(p.runs)} symulacji</span>`;
+
+  document.getElementById('ans-q2-text').innerHTML = `Realistycznie obiecuj <strong>${result.itemsP85.toFixed(0)} elementów</strong> do końca września przy 85% pewności. Jest to <strong>${(result.itemsP85/p.backlog*100).toFixed(0)}%</strong> oryginalnego backlogu (${p.backlog} elem.). Pamiętaj, że pierwsze 4 sprinty stracimy w dużej mierze na urlopy, a w piątym dochodzi obciążenie naprawami sezonowymi.`;
+
+  // footer
+  const now = new Date();
+  document.getElementById('foot-runs').textContent = formatNumber(p.runs);
+  document.getElementById('foot-time').textContent = `${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
+  document.getElementById('last-updated').textContent = `aktualizacja: ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
+}
+
+function recalc() {
+  const p = readParams();
+  // sync min/max scope sliders
+  if (p.scopeMin > p.scopeMax) {
+    document.getElementById('i-scope-max').value = p.scopeMin;
+    p.scopeMax = p.scopeMin;
+  }
+  // update live labels
+  document.getElementById('v-backlog').textContent = p.backlog;
+  document.getElementById('v-scope-min').textContent = (p.scopeMin*100).toFixed(0);
+  document.getElementById('v-scope-max').textContent = (p.scopeMax*100).toFixed(0);
+  document.getElementById('v-vac').textContent = ((1-p.vacFactor)*100).toFixed(0);
+  document.getElementById('v-vac-sprints').textContent = p.vacSprints;
+  document.getElementById('v-seasonal').textContent = ((1-p.seasonalFactor)*100).toFixed(0);
+  document.getElementById('v-seasonal-from').textContent = p.seasonalFrom;
+  document.getElementById('v-runs').textContent = formatNumber(p.runs);
+
+  // run
+  document.body.classList.add('is-computing');
+  // run async so UI updates first
+  setTimeout(() => {
+    const result = runMonteCarlo(p);
+    updateUI(result, p);
+    document.body.classList.remove('is-computing');
+  }, 10);
+}
+
+// debounce for input events
+let debounceTimer = null;
+function scheduleRecalc() {
+  clearTimeout(debounceTimer);
+  debounceTimer = setTimeout(recalc, 180);
+}
+
+// Bind inputs
+['i-backlog','i-start','i-throughput','i-scope-min','i-scope-max',
+ 'i-vac','i-vac-sprints','i-seasonal','i-seasonal-from','i-runs'].forEach(id => {
+  const el = document.getElementById(id);
+  el.addEventListener('input', scheduleRecalc);
+  el.addEventListener('change', scheduleRecalc);
+});
+
+document.getElementById('btn-run').addEventListener('click', recalc);
+document.getElementById('btn-reset').addEventListener('click', () => {
+  document.getElementById('i-backlog').value = 62;
+  document.getElementById('i-start').value = '2026-07-01';
+  document.getElementById('i-throughput').value = '5, 4, 4, 5, 6, 4, 2, 3, 2, 5, 6';
+  document.getElementById('i-scope-min').value = 20;
+  document.getElementById('i-scope-max').value = 30;
+  document.getElementById('i-vac').value = 50;
+  document.getElementById('i-vac-sprints').value = 4;
+  document.getElementById('i-seasonal').value = 25;
+  document.getElementById('i-seasonal-from').value = 5;
+  document.getElementById('i-runs').value = 10000;
+  recalc();
+});
+
+// initial
+recalc();
+</script>
+
+</body>
+</html>
